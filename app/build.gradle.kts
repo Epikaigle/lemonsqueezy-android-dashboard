@@ -11,12 +11,28 @@ android {
         applicationId = "com.epikaigle.lemondashboard"
         minSdk = 33
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+    val releaseKeystorePath = System.getenv("LEMON_KEYSTORE_PATH")
+    val releasePassword = System.getenv("LEMON_KEYSTORE_PASSWORD")
+    val hasSigning = !releaseKeystorePath.isNullOrBlank() && !releasePassword.isNullOrBlank()
+
+    signingConfigs {
+        create("persistentRelease") {
+            if (hasSigning) {
+                storeFile = file(releaseKeystorePath!!)
+                storePassword = releasePassword
+                keyAlias = "lemon-dashboard-release"
+                keyPassword = releasePassword
+                storeType = "PKCS12"
+            }
+        }
     }
     buildTypes {
         release {
+            if (hasSigning) signingConfig = signingConfigs.getByName("persistentRelease")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
