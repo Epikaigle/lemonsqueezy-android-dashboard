@@ -122,7 +122,15 @@ private fun LemonApp(vm: DashboardViewModel) {
                     }
                 }
             }
-            if (!s.connected) {
+            if (s.initializing) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator(color = Lemon)
+                        Spacer(Modifier.height(16.dp))
+                        Text("Ouverture de l’historique local…", color = Muted)
+                    }
+                }
+            } else if (!s.connected) {
                 LoginScreen(loading = s.loading, onConnect = vm::connect)
             } else {
                 val snapshot = s.snapshot
@@ -611,9 +619,16 @@ private fun SubscriptionItem(sub: Subscription, snapshot: Snapshot, currency: St
                 Text(sub.variant, color = Muted, fontSize = 12.sp)
             }
             Spacer(Modifier.height(10.dp))
-            Text("Prochain renouvellement : ${friendlyDate(sub.renewsAt)}", color = Muted, fontSize = 12.sp)
+            if (sub.renewsAt.isNotBlank() && sub.status !in setOf("cancelled", "expired")) {
+                Text("Prochain renouvellement : ${friendlyDate(sub.renewsAt)}", color = Muted, fontSize = 12.sp)
+            }
             if (sub.endsAt.isNotBlank()) {
-                Text("Fin d'accès : ${friendlyDate(sub.endsAt)}", color = Muted, fontSize = 12.sp)
+                Text(
+                    if (sub.status == "cancelled") "Annulé • accès jusqu’au ${friendlyDate(sub.endsAt)}"
+                    else "Fin d’accès : ${friendlyDate(sub.endsAt)}",
+                    color = if (sub.status == "cancelled") Leaf else Muted,
+                    fontSize = 12.sp
+                )
             }
             if (sub.catalogPriceCents != null) {
                 val interval = when (sub.billingInterval) {
