@@ -3,7 +3,7 @@ package com.epikaigle.lemondashboard
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class Store(val id: String, val name: String)
+data class Store(val id: String, val name: String, val currency: String = "USD")
 data class Sale(
     val id: String,
     val storeId: String,
@@ -32,7 +32,11 @@ data class Subscription(
     val endsAt: String,
     val testMode: Boolean,
     val lastInvoiceUsdCents: Long? = null,
-    val lastInvoiceDate: String = ""
+    val lastInvoiceDate: String = "",
+    val catalogPriceCents: Long? = null,
+    val catalogCurrency: String = "",
+    val billingInterval: String = "",
+    val billingIntervalCount: Int = 1
 )
 data class Snapshot(
     val stores: List<Store>,
@@ -50,7 +54,7 @@ object SnapshotCodec {
         put("eurPerUsd", snapshot.eurPerUsd ?: JSONObject.NULL)
         put("fxDate", snapshot.fxDate)
         put("stores", JSONArray().apply {
-            snapshot.stores.forEach { put(JSONObject().put("id", it.id).put("name", it.name)) }
+            snapshot.stores.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("currency", it.currency)) }
         })
         put("sales", JSONArray().apply {
             snapshot.sales.forEach { s ->
@@ -73,6 +77,10 @@ object SnapshotCodec {
                     put("testMode", s.testMode)
                     put("lastInvoiceUsdCents", s.lastInvoiceUsdCents ?: JSONObject.NULL)
                     put("lastInvoiceDate", s.lastInvoiceDate)
+                    put("catalogPriceCents", s.catalogPriceCents ?: JSONObject.NULL)
+                    put("catalogCurrency", s.catalogCurrency)
+                    put("billingInterval", s.billingInterval)
+                    put("billingIntervalCount", s.billingIntervalCount)
                 })
             }
         })
@@ -82,7 +90,7 @@ object SnapshotCodec {
         val root = JSONObject(raw)
         require(root.optInt("version") == 1) { "Version de cache incompatible" }
         val stores = root.getJSONArray("stores").objects().map {
-            Store(it.getString("id"), it.getString("name"))
+            Store(it.getString("id"), it.getString("name"), it.optString("currency", "USD"))
         }
         val sales = root.getJSONArray("sales").objects().map {
             Sale(
@@ -103,7 +111,11 @@ object SnapshotCodec {
                 status = it.getString("status"), renewsAt = it.getString("renewsAt"),
                 endsAt = it.getString("endsAt"), testMode = it.getBoolean("testMode"),
                 lastInvoiceUsdCents = if (it.isNull("lastInvoiceUsdCents")) null else it.getLong("lastInvoiceUsdCents"),
-                lastInvoiceDate = it.optString("lastInvoiceDate")
+                lastInvoiceDate = it.optString("lastInvoiceDate"),
+                catalogPriceCents = if (it.isNull("catalogPriceCents")) null else it.optLong("catalogPriceCents"),
+                catalogCurrency = it.optString("catalogCurrency"),
+                billingInterval = it.optString("billingInterval"),
+                billingIntervalCount = it.optInt("billingIntervalCount", 1)
             )
         }
         return Snapshot(stores, sales, subscriptions, root.getString("fetchedAt"),

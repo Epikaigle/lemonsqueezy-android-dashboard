@@ -457,6 +457,15 @@ private fun SubscriptionItem(sub: Subscription, snapshot: Snapshot, currency: St
             if (sub.endsAt.isNotBlank()) {
                 Text("Fin d'accès : ${friendlyDate(sub.endsAt)}", color = Muted, fontSize = 12.sp)
             }
+            if (sub.catalogPriceCents != null) {
+                val interval = when (sub.billingInterval) {
+                    "month" -> "mois"; "year" -> "an"; "week" -> "semaine"; "day" -> "jour"
+                    else -> sub.billingInterval
+                }
+                val frequency = if (interval.isBlank()) "" else " / ${if (sub.billingIntervalCount > 1) sub.billingIntervalCount.toString() + " " else ""}$interval"
+                Text("Tarif catalogue : ${Analytics.localMoney(sub.catalogPriceCents, sub.catalogCurrency)}$frequency", fontSize = 13.sp)
+                Text("Hors taxes et remises éventuelles", color = Muted, fontSize = 11.sp)
+            }
             if (sub.lastInvoiceUsdCents != null) {
                 Text("Dernière facture payée : ${Analytics.money(sub.lastInvoiceUsdCents, currency, snapshot.eurPerUsd)}",
                     fontSize = 13.sp)

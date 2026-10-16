@@ -85,7 +85,7 @@ class LemonApi {
             for (i in 0 until data.length()) result.add(data.getJSONObject(i))
             val links = json.optJSONObject("links")
             next = if (links == null || links.isNull("next")) null
-                else links.optString("next").takeIf { it.startsWith("https://") }
+                else links.optString("next").also { require(it.startsWith("https://")) { "Pagination invalide" } }
             // ~170 requêtes / minute, en dessous de la limite habituelle de 300/min.
             if (next != null) delay(350)
         }
@@ -101,7 +101,7 @@ class LemonApi {
         progress("Récupération des boutiques…")
         val stores = all("stores", token).map { s ->
             val a = attr(s)
-            Store(s.getString("id"), a.str("name").ifBlank { "Boutique ${s.getString("id")}" })
+            Store(s.getString("id"), a.str("name").ifBlank { "Boutique ${s.getString("id")}" }, a.str("currency").ifBlank { "USD" })
         }
 
         progress("Récupération des abonnements…")
@@ -110,6 +110,8 @@ class LemonApi {
         val orders = all("orders", token)
         progress("Récupération des factures récurrentes…")
         val invoices = all("subscription-invoices", token)
+        progress("Récupération des tarifs…")
+        val pricesById = all("prices", token).associateBy { it.optString("id") }
 
         val subscriptionsById = rawSubs.associateBy { it.optString("id") }
         val invoiceData = invoices.map { raw -> raw to attr(raw) }
@@ -121,6 +123,11 @@ class LemonApi {
         val subscriptions = rawSubs.map { raw ->
             val a = attr(raw)
             val last = mostRecentPaidInvoice[raw.optString("id")]
+            val item = a.optJSONObject("first_subscription_item")
+            val price = item?.idValue("price_id")?.let { pricesById[it] }?.let { attr(it) }
+            val units = item?.optLong("quantity", 1L) ?: 1L
+            val fixedUnitCents = if (price?.str("scheme") == "standard" && price.isNull("usage_aggregation") && !price.isNull("unit_price")) price.optLong("unit_price") else null
+            val storeCurrency = stores.firstOrNull { it.id == a.idValue("store_id") }?.currency ?: "USD"
             Subscription(
                 id = raw.getString("id"),
                 storeId = a.idValue("store_id"),
@@ -131,7 +138,11 @@ class LemonApi {
                 endsAt = a.str("ends_at"),
                 testMode = a.optBoolean("test_mode"),
                 lastInvoiceUsdCents = last?.optLong("total_usd"),
-                lastInvoiceDate = last?.str("created_at") ?: ""
+                lastInvoiceDate = last?.str("created_at") ?: "",
+                catalogPriceCents = fixedUnitCents?.times(units),
+                catalogCurrency = storeCurrency,
+                billingInterval = price?.str("renewal_interval_unit") ?: "",
+                billingIntervalCount = price?.optInt("renewal_interval_quantity", 1) ?: 1
             )
         }
 
