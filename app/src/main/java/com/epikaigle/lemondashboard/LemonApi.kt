@@ -113,7 +113,6 @@ class LemonApi {
         progress("Récupération des tarifs…")
         val pricesById = if (rawSubs.isEmpty()) emptyMap() else all("prices", token).associateBy { it.optString("id") }
 
-        val subscriptionsById = rawSubs.associateBy { it.optString("id") }
         val invoiceData = invoices.map { raw -> raw to attr(raw) }
         val mostRecentPaidInvoice = invoiceData
             .filter { (_, a) -> a.str("status") in setOf("paid", "partial_refund") }
@@ -146,49 +145,7 @@ class LemonApi {
             )
         }
 
-        val sales = orders.map { raw ->
-            val a = attr(raw)
-            Sale(
-                id = "order:${raw.getString("id")}",
-                storeId = a.idValue("store_id"),
-                source = "Commande",
-                product = a.optJSONObject("first_order_item")?.str("product_name")?.ifBlank { "Commande" }
-                    ?: "Commande",
-                status = a.str("status"),
-                currency = a.str("currency"),
-                originalCents = a.optLong("total"),
-                originalRefundCents = a.optLong("refunded_amount"),
-                usdCents = a.optLong("total_usd"),
-                usdRefundCents = a.optLong("refunded_amount_usd"),
-                createdAt = a.str("created_at"),
-                testMode = a.optBoolean("test_mode")
-            )
-        }.toMutableList()
-
-        invoiceData.forEach { (raw, a) ->
-            // Initial invoice is associated with the subscription's original order.
-            // Only renewal/update invoices are added as separate payments.
-            if (a.str("billing_reason") == "initial") return@forEach
-            val subscriptionId = a.idValue("subscription_id")
-            val product = subscriptionsById[subscriptionId]?.let { attr(it).str("product_name") } ?: "Abonnement"
-            sales.add(
-                Sale(
-                    id = "invoice:${raw.getString("id")}",
-                    storeId = a.idValue("store_id"),
-                    source = if (a.str("billing_reason") == "renewal") "Renouvellement" else "Ajustement",
-                    product = product,
-                    status = a.str("status"),
-                    currency = a.str("currency"),
-                    originalCents = a.optLong("total"),
-                    originalRefundCents = a.optLong("refunded_amount"),
-                    usdCents = a.optLong("total_usd"),
-                    usdRefundCents = a.optLong("refunded_amount_usd"),
-                    createdAt = a.str("created_at"),
-                    testMode = a.optBoolean("test_mode"),
-                    subscriptionId = subscriptionId
-                )
-            )
-        }
+        val sales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
         progress("Récupération du taux de change indicatif…")
         val fx = try {
             val response = request("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR", null, false)
