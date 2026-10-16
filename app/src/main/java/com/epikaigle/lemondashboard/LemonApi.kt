@@ -97,7 +97,7 @@ class LemonApi {
     private fun attr(json: JSONObject): JSONObject =
         json.optJSONObject("attributes") ?: throw ApiFailure("Attributs manquants.")
 
-    suspend fun fetch(token: String, progress: suspend (String) -> Unit): Snapshot {
+    suspend fun fetch(token: String, progress: suspend (String) -> Unit): Snapshot = withContext(Dispatchers.IO) {
         progress("Récupération des boutiques…")
         val stores = all("stores", token).map { s ->
             val a = attr(s)
@@ -111,7 +111,7 @@ class LemonApi {
         progress("Récupération des factures récurrentes…")
         val invoices = all("subscription-invoices", token)
         progress("Récupération des tarifs…")
-        val pricesById = all("prices", token).associateBy { it.optString("id") }
+        val pricesById = if (rawSubs.isEmpty()) emptyMap() else all("prices", token).associateBy { it.optString("id") }
 
         val subscriptionsById = rawSubs.associateBy { it.optString("id") }
         val invoiceData = invoices.map { raw -> raw to attr(raw) }
@@ -196,7 +196,7 @@ class LemonApi {
             rate to response.optString("date")
         } catch (_: Exception) { null to "" }
 
-        return Snapshot(
+        Snapshot(
             stores = stores,
             sales = sales.distinctBy { it.id }.sortedByDescending { it.createdAt },
             subscriptions = subscriptions.sortedByDescending { it.renewsAt },
