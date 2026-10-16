@@ -23,7 +23,7 @@ class LemonApi {
 
     private fun safeUrl(url: String, lemonOnly: Boolean = true) = url.toHttpUrl().also {
         require(it.scheme == "https" &&
-            it.host == if (lemonOnly) "api.lemonsqueezy.com" else "api.frankfurter.dev" &&
+            it.host == (if (lemonOnly) "api.lemonsqueezy.com" else "api.frankfurter.dev") &&
             (!lemonOnly || it.encodedPath.startsWith("/v1/"))) {
             "URL de réponse non autorisée"
         }
