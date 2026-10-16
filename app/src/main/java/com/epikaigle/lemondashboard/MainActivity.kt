@@ -162,7 +162,7 @@ private fun Header(busy: Boolean, lastSync: String, onRefresh: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text("Lemon Dashboard", fontWeight = FontWeight.Bold, fontSize = 19.sp)
-            Text("Mis à jour : ${friendlyDate(lastSync)}", color = Muted, fontSize = 11.sp)
+            Text("Synchronisé le ${friendlyDateTime(lastSync)}", color = Muted, fontSize = 11.sp)
         }
         IconButton(onClick = onRefresh, enabled = !busy) {
             Icon(Icons.Default.Refresh, contentDescription = "Actualiser", tint = if (busy) Muted else Lemon)
@@ -232,6 +232,13 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
     val now = remember { LocalDate.now() }
     val m = remember(sales, subs, s.period) { Analytics.metrics(sales, subs, s.period, now) }
     val history = remember(sales, s.period) { Analytics.graphBuckets(sales, s.period, now) }
+    val prevNet = remember(sales, s.period) { Analytics.previousPeriodNet(sales, s.period, now) }
+    val topProducts = remember(sales, s.period) {
+        sales.filter { it.paid && Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, now) }
+            .groupBy { it.product }
+            .mapValues { (_, transactions) -> transactions.sumOf { it.netUsd } }
+            .toList().sortedByDescending { it.second }.take(4)
+    }
     LazyColumn(
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -255,9 +262,23 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
                 Text(Analytics.money(m.netUsdCents, s.currency, snapshot.eurPerUsd),
                     fontSize = 34.sp, fontWeight = FontWeight.Bold)
                 Text(if (s.currency == "EUR")
-                    "Estimation EUR au dernier taux disponible, pas un versement"
+                    "Conversion indicative en EUR au taux disponible"
                 else "Total des paiements retenus en USD",
                     color = Color(0xFFBCD7CE), fontSize = 12.sp)
+                if (prevNet != null) {
+                    Spacer(Modifier.height(14.dp))
+                    val diff = m.netUsdCents - prevNet
+                    val trend = when {
+                        prevNet == 0L && m.netUsdCents > 0 -> "Nouvelles ventes"
+                        prevNet == 0L -> "Pas de changement"
+                        else -> {
+                            val rate = (diff * 100.0) / prevNet
+                            "${if (rate >= 0) "+" else ""}${"%.1f".format(Locale.FRANCE, rate)} %"
+                        }
+                    }
+                    Text("$trend vs période précédente comparable",
+                        color = if (diff >= 0L) Leaf else Danger, fontSize = 12.sp)
+                }
             }
         }
         item {
@@ -275,6 +296,29 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
             }
         }
         item { ChartCard(history, s.currency, snapshot.eurPerUsd) }
+        if (topProducts.isNotEmpty()) {
+            item {
+                Column {
+                    SectionTitle("Meilleurs produits", "Sur la période")
+                    Spacer(Modifier.height(10.dp))
+                    topProducts.forEachIndexed { i, (product, net) ->
+                        Card(colors = CardDefaults.cardColors(containerColor = Panel),
+                            shape = RoundedCornerShape(13.dp),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                            Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text("${i + 1}", color = Leaf, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.width(23.dp))
+                                Text(product, modifier = Modifier.weight(1f),
+                                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.width(10.dp))
+                                Text(Analytics.money(net, s.currency, snapshot.eurPerUsd),
+                                    fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
         item {
             Column {
                 SectionTitle("Dernières transactions", "${sales.size} enregistrements")
@@ -371,16 +415,75 @@ private fun ChartCard(buckets: List<Pair<String, Long>>, currency: String, rate:
 @Composable
 private fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: DashboardViewModel) {
     val today = remember { LocalDate.now() }
-    val rows = remember(sales, s.period) {
+    var query by remember { mutableStateOf("") }
+    var filter by remember { mutableIntStateOf(0) }
+    val inPeriod = remember(sales, s.period) {
         sales.filter { Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, today) }
     }
-    LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Transactions", fontSize = 27.sp, fontWeight = FontWeight.Bold) }
+    val rows = remember(inPeriod, query, filter) {
+        inPeriod.filter { sale ->
+            (query.isBlank() || sale.product.contains(query.trim(), ignoreCase = true) ||
+                sale.id.contains(query.trim(), ignoreCase = true) ||
+                sale.source.contains(query.trim(), ignoreCase = true)) &&
+                when (filter) {
+                    1 -> sale.paid && sale.usdRefundCents == 0L
+                    2 -> sale.usdRefundCents > 0L
+                    3 -> !sale.paid
+                    else -> true
+                }
+        }
+    }
+    LazyColumn(
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Transactions", fontSize = 27.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            Text("Parcourez les paiements, factures et remboursements.", color = Muted, fontSize = 12.sp)
+        }
         item { StoreChips(snapshot, s.selectedStore, vm::store) }
         item { PeriodChips(s.period, vm::period) }
-        item { Text("${rows.size} transactions sur la période", color = Muted, fontSize = 13.sp) }
+        item {
+            OutlinedTextField(
+                value = query, onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("Rechercher un produit ou une référence") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = "Effacer la recherche")
+                    }
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+        item {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Tous", "Payés", "Remboursés", "Non encaissés").forEachIndexed { i, label ->
+                    FilterChip(selected = filter == i, onClick = { filter = i },
+                        label = { Text(label) })
+                }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("${rows.size} résultat(s)", color = Muted, fontSize = 12.sp)
+                Text("${inPeriod.size} sur la période", color = Muted, fontSize = 12.sp)
+            }
+        }
         if (rows.isEmpty()) {
-            item { EmptyCard("Aucune transaction pour cette période.") }
+            item {
+                EmptyCard(
+                    if (inPeriod.isEmpty()) "Aucune transaction sur cette période."
+                    else "Aucun résultat. Modifiez la recherche ou les filtres."
+                )
+                if (query.isNotBlank() || filter != 0) {
+                    TextButton(onClick = { query = ""; filter = 0 }) { Text("Effacer les filtres") }
+                }
+            }
         } else {
             items(rows, key = { it.id }) { sale -> SaleItem(sale, snapshot, s.currency) }
         }
@@ -419,9 +522,31 @@ private fun SaleItem(sale: Sale, snapshot: Snapshot, currency: String) {
 @Composable
 private fun SubscriptionsScreen(snapshot: Snapshot, subscriptions: List<Subscription>,
                                 s: UiState, vm: DashboardViewModel) {
-    val counts = subscriptions.groupingBy { it.status }.eachCount()
-    LazyColumn(contentPadding = PaddingValues(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Abonnements", fontWeight = FontWeight.Bold, fontSize = 27.sp) }
+    var query by remember { mutableStateOf("") }
+    var filter by remember { mutableIntStateOf(0) }
+    val counts = remember(subscriptions) { subscriptions.groupingBy { it.status }.eachCount() }
+    val rows = remember(subscriptions, query, filter) {
+        subscriptions.filter { sub ->
+            (query.isBlank() || sub.product.contains(query.trim(), ignoreCase = true) ||
+                sub.variant.contains(query.trim(), ignoreCase = true) ||
+                sub.id.contains(query.trim(), ignoreCase = true)) &&
+                when (filter) {
+                    1 -> sub.status == "active"
+                    2 -> sub.status == "on_trial"
+                    3 -> sub.status != "active" && sub.status != "on_trial"
+                    else -> true
+                }
+        }
+    }
+    LazyColumn(
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 10.dp, bottom = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item {
+            Text("Abonnements", fontWeight = FontWeight.Bold, fontSize = 27.sp)
+            Spacer(Modifier.height(5.dp))
+            Text("Statuts, tarifs et prochaines échéances.", color = Muted, fontSize = 12.sp)
+        }
         item { StoreChips(snapshot, s.selectedStore, vm::store) }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -431,11 +556,44 @@ private fun SubscriptionsScreen(snapshot: Snapshot, subscriptions: List<Subscrip
                     Modifier.weight(1f))
             }
         }
-        item { Explanation("Le montant montré est le dernier paiement connu, pas une promesse de prochain débit ni un MRR contractuel.") }
-        if (subscriptions.isEmpty()) {
-            item { EmptyCard("Aucun abonnement pour cette boutique.") }
+        item {
+            OutlinedTextField(
+                value = query, onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                placeholder = { Text("Rechercher un abonnement") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) IconButton(onClick = { query = "" }) {
+                        Icon(Icons.Default.Close, contentDescription = "Effacer la recherche")
+                    }
+                },
+                shape = RoundedCornerShape(16.dp)
+            )
+        }
+        item {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("Tous", "Actifs", "Essais", "Autres").forEachIndexed { i, label ->
+                    FilterChip(selected = filter == i, onClick = { filter = i },
+                        label = { Text(label) })
+                }
+            }
+        }
+        item { Text("${rows.size} abonnement(s) affiché(s)", color = Muted, fontSize = 12.sp) }
+        if (rows.isEmpty()) {
+            item {
+                EmptyCard(if (subscriptions.isEmpty()) "Aucun abonnement pour cette boutique."
+                    else "Aucun abonnement ne correspond à vos filtres.")
+                if (query.isNotBlank() || filter != 0) {
+                    TextButton(onClick = { query = ""; filter = 0 }) { Text("Effacer les filtres") }
+                }
+            }
         } else {
-            items(subscriptions, key = { it.id }) { sub -> SubscriptionItem(sub, snapshot, s.currency) }
+            items(rows, key = { it.id }) { sub -> SubscriptionItem(sub, snapshot, s.currency) }
+        }
+        item {
+            Explanation("Le tarif affiché est un prix catalogue. La dernière facture payée ne prédit pas le prochain débit : remises, taxes et prorata peuvent changer.")
         }
     }
 }
@@ -641,3 +799,8 @@ private fun friendlyDate(iso: String): String {
     val day = Analytics.dateOf(iso) ?: return "indisponible"
     return day.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.FRANCE))
 }
+
+private fun friendlyDateTime(iso: String): String = try {
+    val dt = java.time.Instant.parse(iso).atZone(java.time.ZoneId.systemDefault())
+    dt.format(DateTimeFormatter.ofPattern("dd MMM à HH:mm", Locale.FRANCE))
+} catch (_: Exception) { "jamais" }
