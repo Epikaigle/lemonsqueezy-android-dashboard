@@ -59,6 +59,33 @@ object Analytics {
         )
     }
 
+    /**
+     * Compare elapsed portions of periods, never a partial current month against a
+     * full prior month. Null means there is no sensible comparison ("Tout").
+     */
+    fun previousPeriodNet(sales: List<Sale>, period: Period, today: LocalDate = LocalDate.now()): Long? {
+        val start: LocalDate
+        val end: LocalDate
+        when (period) {
+            Period.WEEK -> {
+                start = today.minusDays(13)
+                end = today.minusDays(7)
+            }
+            Period.MONTH -> {
+                start = today.minusMonths(1).withDayOfMonth(1)
+                end = start.withDayOfMonth(today.dayOfMonth.coerceAtMost(start.lengthOfMonth()))
+            }
+            Period.YEAR -> {
+                start = today.minusYears(1).withDayOfYear(1)
+                end = today.minusYears(1)
+            }
+            Period.ALL -> return null
+        }
+        return sales.asSequence().filter { it.paid }
+            .filter { sale -> dateOf(sale.createdAt)?.let { !it.isBefore(start) && !it.isAfter(end) } == true }
+            .sumOf { it.netUsd }
+    }
+
     fun graphBuckets(sales: List<Sale>, period: Period, today: LocalDate = LocalDate.now()): List<Pair<String, Long>> {
         val paid = sales.filter { it.paid && inPeriod(dateOf(it.createdAt), period, today) }
         val periods = when (period) {
