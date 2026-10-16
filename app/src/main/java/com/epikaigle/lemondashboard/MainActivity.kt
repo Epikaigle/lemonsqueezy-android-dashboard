@@ -520,6 +520,14 @@ private fun PayoutScreen() {
             }
         }
         Spacer(Modifier.height(18.dp))
+        SettingCard("Calendrier habituel (indicatif)") {
+            Text("Création des versements : le 1er et le 15 de chaque mois.", color = Leaf)
+            Text("Mise en paiement annoncée : les 14 et 28 du mois.", color = Muted)
+            Text("Réception bancaire : généralement 1 à 5 jours supplémentaires.", color = Muted)
+            Text("Ventes retenues 13 jours • Seuil minimum de 50 USD.", color = Muted)
+            Text("Ces règles ne confirment aucune somme ni date pour ton compte.", color = Lemon, fontSize = 12.sp)
+        }
+        Spacer(Modifier.height(18.dp))
         Explanation("Le chiffre d'affaires total n'est pas le montant à recevoir : frais, taxes, retenues, remboursement et calendrier bancaire peuvent modifier le versement final.")
     }
 }
