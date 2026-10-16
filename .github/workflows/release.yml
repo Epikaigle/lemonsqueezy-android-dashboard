@@ -58,7 +58,7 @@ jobs:
       - name: Export signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: LemonDashboard-v1.1.0-persistent-signed
+          name: LemonDashboard-v1.2.0-persistent-signed
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 90
       - name: Forget local keystore

@@ -4,16 +4,16 @@ Tableau de bord personnel Android 17 pour Lemon Squeezy, conçu pour **Pixel 7 P
 
 Application Kotlin + Jetpack Compose, sans service intermédiaire : la clé API est saisie **uniquement dans l'application**, chiffrée au repos par Android Keystore. Aucun secret n'est inclus dans le dépôt public.
 
-## Fonctionnalités v1.1
+## Fonctionnalités v1.2
 
-- Ventes et renouvellements, graphiques par semaine, mois, année et historique complet.
+- Ventes et renouvellements, graphiques par jour (heures), semaine, mois, année et historique complet.
 - Comparaison avec la période antérieure **sur la même durée écoulée**.
 - Top produits, brut, remboursements et net après remboursement.
 - Recherche et filtres : transactions payées, remboursées, non encaissées.
 - Recherche, filtres et échéances pour les abonnements.
 - Prix catalogue des abonnements fixes, dernières factures connues.
 - Multi-boutiques, EUR indicatif / USD, données de test facultatives.
-- Cache chiffré hors connexion et actualisation explicite.
+- Cache local chiffré et compressé, écriture atomique et migration du cache précédent ; actualisation explicite.
 - Calendrier des versements annoncé comme *indicatif*. Aucun solde ni virement confirmé inventé.
 
 Les revenus affichés **ne sont pas** les versements bancaires nets.
@@ -41,9 +41,9 @@ Les deux valeurs doivent venir des fichiers privés remis au propriétaire ; le 
 
 Ensuite ouvrir **Actions → Signed Android release → Run workflow**. Le workflow :
 1. Restaure temporairement la clé privée depuis le secret chiffré GitHub Actions.
-2. Compile l'APK release, avec `versionCode=2`.
+2. Compile l'APK release, avec `versionCode=3`.
 3. Vérifie la signature via `apksigner verify`.
-4. Publie l'artefact `LemonDashboard-v1.1.0-persistent-signed`, téléchargeable depuis l'exécution.
+4. Publie l'artefact `LemonDashboard-v1.2.0-persistent-signed`, téléchargeable depuis l'exécution.
 5. Supprime la copie temporaire du keystore.
 
 La signature doit rester **strictement identique** pour pouvoir mettre à jour l'application sans la désinstaller. Conserver une sauvegarde du keystore et du mot de passe dans un endroit sûr. **Ne pas changer de keystore** sur une version ultérieure.
@@ -80,3 +80,10 @@ Les builds de contrôle sont produits par **Android CI**, les builds signés par
 - Les formules d'abonnement variables peuvent ne pas avoir de prix catalogue fixe affichable.
 - L'application est personnelle et en lecture seule, sans analyse automatisée côté serveur.
 - Les tests unitaires et GitHub CI **ne remplacent pas** un test sur un Pixel 7 Pro avec une clé Lemon Squeezy valide.
+
+## Historique de fiabilité v1.2
+
+- Historique 100 000 transactions testé côté agrégation ; un historique réel complet n'a pas encore été confronté à un compte Lemon Squeezy.
+- Conversion EUR indicative, basée sur le taux disponible, et non sur le taux historique de chaque paiement.
+- Chargement réseau et cache sur des threads non UI pour éviter les blocages.
+- Les abonnements annulés peuvent conserver une période de grâce jusqu'à leur date d'expiration.
