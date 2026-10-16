@@ -151,7 +151,10 @@ class LemonApi {
             val response = request("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR", null, false)
             val rate = response.optJSONObject("rates")?.optDouble("EUR")?.takeIf { it.isFinite() && it > 0 }
             rate to response.optString("date")
-        } catch (_: Exception) { null to "" }
+        } catch (error: Exception) {
+            if (error is kotlinx.coroutines.CancellationException) throw error
+            null to ""
+        }
 
         Snapshot(
             stores = stores,

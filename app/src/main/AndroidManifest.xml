@@ -12,7 +12,6 @@
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"
-            android:screenOrientation="unspecified"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
