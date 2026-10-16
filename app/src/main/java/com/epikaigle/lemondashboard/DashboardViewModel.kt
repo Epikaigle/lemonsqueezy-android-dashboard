@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 
 data class UiState(
     val connected: Boolean = false,
+    val initializing: Boolean = false,
     val loading: Boolean = false,
     val progress: String = "",
     val error: String? = null,
@@ -28,14 +29,24 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val api = LemonApi()
     var state by mutableStateOf(UiState(
         connected = secure.readToken() != null,
-        snapshot = secure.readSnapshot()?.let { runCatching { SnapshotCodec.decode(it) }.getOrNull() },
+        initializing = secure.readToken() != null,
         selectedStore = secure.storeId(),
         includeTest = secure.showTests(),
         currency = secure.currency()
     ))
         private set
 
-    init { if (state.connected) refresh() }
+    init {
+        if (state.connected) {
+            viewModelScope.launch {
+                val cached = withContext(Dispatchers.IO) {
+                    secure.readSnapshot()?.let { runCatching { SnapshotCodec.decode(it) }.getOrNull() }
+                }
+                state = state.copy(snapshot = cached, initializing = false)
+                refresh()
+            }
+        }
+    }
 
     fun connect(raw: String) {
         val token = raw.trim()
@@ -56,6 +67,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 state = state.copy(connected = true, loading = false, progress = "",
                     snapshot = complete, selectedStore = "", tab = 0)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 state = state.copy(loading = false, progress = "",
                     error = e.message ?: "Connexion impossible. Vérifie ton réseau et ta clé API.")
             }
@@ -76,6 +88,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 withContext(Dispatchers.IO) { secure.saveSnapshot(SnapshotCodec.encode(snapshot)) }
                 state = state.copy(loading = false, progress = "", snapshot = snapshot)
             } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
                 state = state.copy(loading = false, progress = "",
                     error = e.message ?: "Synchronisation impossible. Cache conservé.")
             }
