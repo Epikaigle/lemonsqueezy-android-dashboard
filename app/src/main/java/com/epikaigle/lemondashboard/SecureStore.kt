@@ -3,55 +3,106 @@ package com.epikaigle.lemondashboard
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
+import android.util.AtomicFile
 import android.util.Base64
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.io.File
 import java.security.KeyStore
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * Encrypted values never leave app-private storage. No Android backup is permitted.
- * An Android Keystore AES/GCM key encrypts the API token and offline snapshot.
+ * API token: AES-256-GCM in private preferences.
+ * Large history: compressed then AES-256-GCM into an atomic private no-backup file.
+ * Key alias is deliberately unchanged so installed v1.1 users retain their token/cache.
  */
 class SecureStore(context: Context) {
     private val prefs = context.getSharedPreferences("lemon_private", Context.MODE_PRIVATE)
+    private val snapshotFile = AtomicFile(File(context.noBackupFilesDir, "lemon_snapshot_v2.bin"))
     private val alias = "lemon-dashboard-data-v1"
 
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        val existing = ks.getKey(alias, null) as? SecretKey
-        if (existing != null) return existing
-        val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        generator.init(
-            KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+        (ks.getKey(alias, null) as? SecretKey)?.let { return it }
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").run {
+            init(KeyGenParameterSpec.Builder(alias,
+                    KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                 .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                 .setKeySize(256)
-                .build()
-        )
-        return generator.generateKey()
+                .build())
+            generateKey()
+        }
     }
 
-    private fun encrypt(clear: String): String {
+    private fun encrypt(clear: ByteArray): ByteArray {
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
         cipher.init(Cipher.ENCRYPT_MODE, key())
-        val bytes = cipher.iv + cipher.doFinal(clear.toByteArray(Charsets.UTF_8))
-        return Base64.encodeToString(bytes, Base64.NO_WRAP)
+        return cipher.iv + cipher.doFinal(clear)
     }
 
-    private fun decrypt(encoded: String): String {
-        val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        require(bytes.size > 28) { "Cache chiffré invalide" }
+    private fun decrypt(blob: ByteArray): ByteArray {
+        require(blob.size >= 29) { "Données chiffrées invalides" }
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, bytes.copyOfRange(0, 12)))
-        return cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8)
+        cipher.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, blob.copyOfRange(0, 12)))
+        return cipher.doFinal(blob, 12, blob.size - 12)
     }
 
-    fun readToken(): String? = prefs.getString("token", null)?.let { runCatching { decrypt(it) }.getOrNull() }
-    fun saveToken(value: String) { check(prefs.edit().putString("token", encrypt(value)).commit()) }
-    fun readSnapshot(): String? = prefs.getString("snapshot", null)?.let { runCatching { decrypt(it) }.getOrNull() }
-    fun saveSnapshot(value: String) { check(prefs.edit().putString("snapshot", encrypt(value)).commit()) }
+    fun readToken(): String? = prefs.getString("token", null)?.let { saved ->
+        runCatching {
+            decrypt(Base64.decode(saved, Base64.NO_WRAP)).toString(Charsets.UTF_8)
+        }.getOrNull()
+    }
+
+    fun saveToken(value: String) {
+        val encrypted = Base64.encodeToString(encrypt(value.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+        check(prefs.edit().putString("token", encrypted).commit()) { "Impossible de conserver le jeton" }
+    }
+
+    fun readSnapshot(): String? {
+        if (snapshotFile.baseFile.exists()) {
+            // If an encrypted cache cannot be decrypted, fail closed; never return untrusted bytes.
+            return runCatching {
+                val bytes = snapshotFile.readFully()
+                require(bytes.size <= 80 * 1024 * 1024) { "Cache trop volumineux" }
+                val decrypted = decrypt(bytes)
+                GZIPInputStream(ByteArrayInputStream(decrypted)).bufferedReader(Charsets.UTF_8).use {
+                    it.readText()
+                }
+            }.getOrNull()
+        }
+        // Backward-compatible read of v1.1 cache. The old key stays usable.
+        return prefs.getString("snapshot", null)?.let { saved ->
+            runCatching {
+                decrypt(Base64.decode(saved, Base64.NO_WRAP)).toString(Charsets.UTF_8)
+            }.getOrNull()
+        }
+    }
+
+    fun saveSnapshot(value: String) {
+        val compressed = ByteArrayOutputStream().use { out ->
+            GZIPOutputStream(out).use { zip -> zip.write(value.toByteArray(Charsets.UTF_8)) }
+            out.toByteArray()
+        }
+        val encrypted = encrypt(compressed)
+        var stream: java.io.FileOutputStream? = null
+        try {
+            stream = snapshotFile.startWrite()
+            stream.write(encrypted)
+            snapshotFile.finishWrite(stream)
+        } catch (error: Exception) {
+            if (stream != null) snapshotFile.failWrite(stream)
+            throw error
+        }
+        // Remove old base64 history only after the new atomic file is fully durable.
+        prefs.edit().remove("snapshot").apply()
+    }
+
     fun storeId(): String = prefs.getString("store_id", "") ?: ""
     fun saveStoreId(value: String) { prefs.edit().putString("store_id", value).apply() }
     fun showTests(): Boolean = prefs.getBoolean("show_test", false)
@@ -60,6 +111,7 @@ class SecureStore(context: Context) {
     fun saveCurrency(value: String) { prefs.edit().putString("currency", value).apply() }
 
     fun clear() {
+        snapshotFile.delete()
         check(prefs.edit().clear().commit())
         KeyStore.getInstance("AndroidKeyStore").apply { load(null); deleteEntry(alias) }
     }

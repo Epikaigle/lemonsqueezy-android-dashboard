@@ -67,6 +67,15 @@ class AnalyticsTest {
         assertNull(Analytics.previousPeriodNet(listOf(sale("a", 100)), Period.ALL, date))
     }
 
+    @Test fun largeHistoryHasCorrectGraphTotals() {
+        val sales = List(100_000) { i ->
+            sale("sale:$i", 10, at = "2026-10-16T11:00:00Z")
+        }
+        val graph = Analytics.graphBuckets(sales, Period.MONTH, date)
+        assertEquals(1_000_000L, graph.sumOf { it.second })
+        assertEquals(1_000_000L, graph.first { it.first == "16" }.second)
+    }
+
     @Test fun activeCountDoesNotIncludeCancelledGrace() {
         val sub = { id: String, status: String ->
             Subscription(id, "1", "Produit", "", status, "", "", false)

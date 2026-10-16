@@ -86,34 +86,44 @@ object Analytics {
             .sumOf { it.netUsd }
     }
 
+    /**
+     * Linear-time aggregation for long histories: 100k+ transactions must not require
+     * a separate full scan for each graph bucket.
+     */
     fun graphBuckets(sales: List<Sale>, period: Period, today: LocalDate = LocalDate.now()): List<Pair<String, Long>> {
-        val paid = sales.filter { it.paid && inPeriod(dateOf(it.createdAt), period, today) }
-        val periods = when (period) {
+        val grouped = HashMap<String, Long>()
+        var firstYear = today.year
+        sales.forEach { sale ->
+            if (!sale.paid) return@forEach
+            val date = dateOf(sale.createdAt) ?: return@forEach
+            if (!inPeriod(date, period, today)) return@forEach
+            val key = when (period) {
+                Period.WEEK, Period.MONTH -> date.toString()
+                Period.YEAR -> YearMonth.from(date).toString()
+                Period.ALL -> date.year.toString()
+            }
+            grouped[key] = (grouped[key] ?: 0L) + sale.netUsd
+            if (date.year < firstYear) firstYear = date.year
+        }
+        val buckets = when (period) {
             Period.WEEK -> (6 downTo 0).map { today.minusDays(it.toLong()) }
             Period.MONTH -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
             Period.YEAR -> (1..12).map { today.withMonth(it).withDayOfMonth(1) }
-            Period.ALL -> {
-                val years = paid.mapNotNull { dateOf(it.createdAt)?.year }
-                val first = (years.minOrNull() ?: today.year).coerceAtMost(today.year)
-                (first..today.year).map { LocalDate.of(it, 1, 1) }
-            }
+            Period.ALL -> (firstYear..today.year).map { LocalDate.of(it, 1, 1) }
         }
-        return periods.map { day ->
-            val value = paid.filter { sale ->
-                val d = dateOf(sale.createdAt)
-                when (period) {
-                    Period.WEEK, Period.MONTH -> d == day
-                    Period.YEAR -> d?.year == day.year && d.month == day.month
-                    Period.ALL -> d?.year == day.year
-                }
-            }.sumOf { it.netUsd }
+        return buckets.map { day ->
+            val key = when (period) {
+                Period.WEEK, Period.MONTH -> day.toString()
+                Period.YEAR -> YearMonth.from(day).toString()
+                Period.ALL -> day.year.toString()
+            }
             val label = when (period) {
                 Period.WEEK -> "${day.dayOfMonth}/${day.monthValue}"
                 Period.MONTH -> day.dayOfMonth.toString()
                 Period.YEAR -> day.monthValue.toString()
                 Period.ALL -> day.year.toString()
             }
-            label to value
+            label to (grouped[key] ?: 0L)
         }
     }
 
