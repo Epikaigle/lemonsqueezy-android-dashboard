@@ -307,7 +307,7 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
         if (topProducts.isNotEmpty()) {
             item {
                 Column {
-                    SectionTitle("Meilleurs produits", "Sur la période")
+                    SectionTitle("Produits associés", "Attribution indicative")
                     Spacer(Modifier.height(10.dp))
                     topProducts.forEachIndexed { i, (product, net) ->
                         Card(colors = CardDefaults.cardColors(containerColor = Panel),
@@ -344,7 +344,7 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
                 }
             }
         }
-        item { Explanation("Paiements des commandes et factures récurrentes non initiales. Les montants sont des ventes, pas des bénéfices ou virements bancaires.") }
+        item { Explanation("Montants des commandes attribués à leur premier article (commande multi-produits : classement indicatif). Les factures initiales d’abonnement ne sont pas comptées deux fois. Il s’agit de ventes, pas de bénéfices ou de virements.") }
     }
 }
 
