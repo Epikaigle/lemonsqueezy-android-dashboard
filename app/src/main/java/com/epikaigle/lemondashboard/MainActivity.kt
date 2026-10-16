@@ -410,7 +410,7 @@ private fun SaleItem(sale: Sale, snapshot: Snapshot, currency: String) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd),
                     fontWeight = FontWeight.Bold)
-                Text(Analytics.localMoney(originalNet, sale.currency), color = Muted, fontSize = 11.sp)
+                Text(if (sale.paid) Analytics.localMoney(originalNet, sale.currency) else "Non encaissé", color = Muted, fontSize = 11.sp)
             }
         }
     }
