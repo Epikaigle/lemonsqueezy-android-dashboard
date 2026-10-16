@@ -46,7 +46,15 @@ jobs:
         shell: bash
         run: |
           SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
-          "$SDK_ROOT/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+          SIGNER="$SDK_ROOT/build-tools/36.0.0/apksigner"
+          APK="app/build/outputs/apk/release/app-release.apk"
+          "$SIGNER" verify --verbose --print-certs "$APK"
+          FINGERPRINT="$("$SIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+          EXPECTED="9bd95333a255e160accb1c8cc4e017ad39fdf2a81058224ded5979cbebd79ef4"
+          if [[ "$FINGERPRINT" != "$EXPECTED" ]]; then
+            echo "::error::Signature release incorrecte : empreinte du certificat différente !"
+            exit 1
+          fi
       - name: Export signed APK
         uses: actions/upload-artifact@v4
         with:
