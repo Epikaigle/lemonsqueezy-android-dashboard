@@ -126,7 +126,7 @@ class LemonApi {
             val item = a.optJSONObject("first_subscription_item")
             val price = item?.idValue("price_id")?.let { pricesById[it] }?.let { attr(it) }
             val units = item?.optLong("quantity", 1L) ?: 1L
-            val fixedUnitCents = if (price?.str("scheme") == "standard" && price.isNull("usage_aggregation") && !price.isNull("unit_price")) price.optLong("unit_price") else null
+            val fixedUnitCents = if (price != null && price.str("scheme") == "standard" && price.isNull("usage_aggregation") && !price.isNull("unit_price")) price.optLong("unit_price") else null
             val storeCurrency = stores.firstOrNull { it.id == a.idValue("store_id") }?.currency ?: "USD"
             Subscription(
                 id = raw.getString("id"),
