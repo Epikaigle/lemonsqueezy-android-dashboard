@@ -46,6 +46,27 @@ class AnalyticsTest {
         assertEquals(listOf(100L, 200L), buckets.map { it.second })
     }
 
+    @Test fun comparesElapsedMonthNotEntirePreviousMonth() {
+        val records = listOf(
+            sale("previous-early", 1000, at = "2026-09-05T11:00:00Z"),
+            sale("previous-late", 4000, at = "2026-09-27T11:00:00Z"),
+            sale("current", 2500, at = "2026-10-10T11:00:00Z")
+        )
+        assertEquals(1000L, Analytics.previousPeriodNet(records, Period.MONTH, date))
+    }
+
+    @Test fun comparesPreviousSevenDays() {
+        val records = listOf(
+            sale("previous", 700, at = "2026-10-06T11:00:00Z"),
+            sale("this-week", 1700, at = "2026-10-13T11:00:00Z")
+        )
+        assertEquals(700L, Analytics.previousPeriodNet(records, Period.WEEK, date))
+    }
+
+    @Test fun allPeriodHasNoComparison() {
+        assertNull(Analytics.previousPeriodNet(listOf(sale("a", 100)), Period.ALL, date))
+    }
+
     @Test fun activeCountDoesNotIncludeCancelledGrace() {
         val sub = { id: String, status: String ->
             Subscription(id, "1", "Produit", "", status, "", "", false)
