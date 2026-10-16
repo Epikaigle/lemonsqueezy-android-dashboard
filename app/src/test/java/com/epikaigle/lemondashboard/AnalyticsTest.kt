@@ -67,6 +67,18 @@ class AnalyticsTest {
         assertNull(Analytics.previousPeriodNet(listOf(sale("a", 100)), Period.ALL, date))
     }
 
+    @Test fun dayPeriodAndHourlyBuckets() {
+        val rows = listOf(
+            sale("morning", 450, at = "2026-10-16T09:00:00Z"),
+            sale("evening", 550, at = "2026-10-16T16:00:00Z"),
+            sale("old", 200, at = "2026-10-15T16:00:00Z")
+        )
+        val hours = Analytics.graphBuckets(rows, Period.DAY, date)
+        assertEquals(24, hours.size)
+        assertEquals(1000L, hours.sumOf { it.second })
+        assertEquals(1000L, Analytics.metrics(rows, emptyList(), Period.DAY, date).netUsdCents)
+    }
+
     @Test fun largeHistoryHasCorrectGraphTotals() {
         val sales = List(100_000) { i ->
             sale("sale:$i", 10, at = "2026-10-16T11:00:00Z")

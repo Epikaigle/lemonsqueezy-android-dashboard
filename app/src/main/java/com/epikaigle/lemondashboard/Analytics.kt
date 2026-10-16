@@ -12,7 +12,7 @@ import java.util.Currency
 import java.util.Locale
 
 enum class Period(val title: String) {
-    WEEK("7 jours"), MONTH("Mois"), YEAR("Année"), ALL("Tout")
+    DAY("Jour"), WEEK("7 jours"), MONTH("Mois"), YEAR("Année"), ALL("Tout")
 }
 
 data class Metrics(
@@ -39,6 +39,7 @@ object Analytics {
     fun inPeriod(date: LocalDate?, period: Period, today: LocalDate = LocalDate.now()): Boolean {
         if (date == null || date.isAfter(today)) return false
         return when (period) {
+            Period.DAY -> date == today
             Period.WEEK -> !date.isBefore(today.minusDays(6))
             Period.MONTH -> YearMonth.from(date) == YearMonth.from(today)
             Period.YEAR -> date.year == today.year
@@ -67,6 +68,7 @@ object Analytics {
         val start: LocalDate
         val end: LocalDate
         when (period) {
+            Period.DAY -> return null
             Period.WEEK -> {
                 start = today.minusDays(13)
                 end = today.minusDays(7)
@@ -91,6 +93,16 @@ object Analytics {
      * a separate full scan for each graph bucket.
      */
     fun graphBuckets(sales: List<Sale>, period: Period, today: LocalDate = LocalDate.now()): List<Pair<String, Long>> {
+        if (period == Period.DAY) {
+            val hours = LongArray(24)
+            sales.forEach { sale ->
+                if (!sale.paid) return@forEach
+                val instant = runCatching { Instant.parse(sale.createdAt) }.getOrNull() ?: return@forEach
+                val local = instant.atZone(ZoneId.systemDefault())
+                if (local.toLocalDate() == today) hours[local.hour] += sale.netUsd
+            }
+            return (0..23).map { "${it}h" to hours[it] }
+        }
         val grouped = HashMap<String, Long>()
         var firstYear = today.year
         sales.forEach { sale ->
@@ -98,6 +110,7 @@ object Analytics {
             val date = dateOf(sale.createdAt) ?: return@forEach
             if (!inPeriod(date, period, today)) return@forEach
             val key = when (period) {
+                Period.DAY -> error("already handled")
                 Period.WEEK, Period.MONTH -> date.toString()
                 Period.YEAR -> YearMonth.from(date).toString()
                 Period.ALL -> date.year.toString()
@@ -106,6 +119,7 @@ object Analytics {
             if (date.year < firstYear) firstYear = date.year
         }
         val buckets = when (period) {
+            Period.DAY -> error("already handled")
             Period.WEEK -> (6 downTo 0).map { today.minusDays(it.toLong()) }
             Period.MONTH -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
             Period.YEAR -> (1..12).map { today.withMonth(it).withDayOfMonth(1) }
@@ -113,11 +127,13 @@ object Analytics {
         }
         return buckets.map { day ->
             val key = when (period) {
+                Period.DAY -> error("already handled")
                 Period.WEEK, Period.MONTH -> day.toString()
                 Period.YEAR -> YearMonth.from(day).toString()
                 Period.ALL -> day.year.toString()
             }
             val label = when (period) {
+                Period.DAY -> error("already handled")
                 Period.WEEK -> "${day.dayOfMonth}/${day.monthValue}"
                 Period.MONTH -> day.dayOfMonth.toString()
                 Period.YEAR -> day.monthValue.toString()
