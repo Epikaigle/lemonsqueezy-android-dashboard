@@ -1,45 +1,82 @@
 # Lemon Dashboard 🍋
 
-Application **Android native et personnelle** pour consulter les commandes, factures récurrentes et abonnements Lemon Squeezy. Kotlin, Compose, HTTPS et sauvegarde locale chiffrée.
+Tableau de bord personnel Android 17 pour Lemon Squeezy, conçu pour **Pixel 7 Pro**.
 
-## Installer sur ton Pixel 7 Pro
+Application Kotlin + Jetpack Compose, sans service intermédiaire : la clé API est saisie **uniquement dans l'application**, chiffrée au repos par Android Keystore. Aucun secret n'est inclus dans le dépôt public.
 
-1. Ouvre **Actions → Android CI** sur ce dépôt.
-2. Choisis le dernier build réussi et télécharge **lemon-dashboard-debug-apk** (artifact ZIP).
-3. Décompresse puis installe l'APK sur ton Pixel 7 Pro. Autorise l'installation depuis cette source si Android le demande.
-4. Crée une clé en mode **test** ou **live** dans les paramètres API Lemon Squeezy, puis saisis-la **uniquement dans l'application**.
+## Fonctionnalités v1.1
 
-Les APK de CI sont signées avec une clé de développement éphémère. Pour mettre à jour une version déjà installée sans la désinstaller, il faudra une **clé de signature persistante**, jamais committée, et un workflow release dédié.
+- Ventes et renouvellements, graphiques par semaine, mois, année et historique complet.
+- Comparaison avec la période antérieure **sur la même durée écoulée**.
+- Top produits, brut, remboursements et net après remboursement.
+- Recherche et filtres : transactions payées, remboursées, non encaissées.
+- Recherche, filtres et échéances pour les abonnements.
+- Prix catalogue des abonnements fixes, dernières factures connues.
+- Multi-boutiques, EUR indicatif / USD, données de test facultatives.
+- Cache chiffré hors connexion et actualisation explicite.
+- Calendrier des versements annoncé comme *indicatif*. Aucun solde ni virement confirmé inventé.
 
-## Fonctionnalités
+Les revenus affichés **ne sont pas** les versements bancaires nets.
 
-- Accueil et graphique des ventes (périodes jour, mois, année et tout l'historique).
-- Revenu enregistré depuis les commandes payées et les factures d'abonnement **non initiales** payées (anti-double comptage).
-- Ventes par produit, nombre de commandes, montants remboursés et revenu après remboursements.
-- Liste des abonnements et prochaine date de renouvellement.
-- Sélection de boutique, inclusion ou non du mode test, affichage USD ou devise originale.
-- Synchronisation manuelle, historique hors ligne, chiffrement Android Keystore.
-- Guide de versements sans inventer de paiements confirmés.
+## Sécurité et confidentialité
 
-## Limites connues
+- **Aucune clé Lemon Squeezy n'est stockée dans GitHub.**
+- Le jeton et l'historique JSON sont chiffrés sur le téléphone avec AES-GCM et Android Keystore.
+- Backup Android désactivé, HTTPS exclusivement, captures d'écran bloquées.
+- Le taux indicatif EUR provient de Frankfurter (requête sans jeton API Lemon Squeezy).
+- Si le Pixel est perdu, révoquer la clé API depuis le compte Lemon Squeezy.
+- Le dépôt peut être public ; **ne jamais committer** les keystores de signature, mots de passe, secrets, factures ou caches privés.
 
-- Les montants affichés correspondent aux **ventes**, pas au solde ni aux virements réellement versés.
-- Les renouvellements et ajustements de factures sont inclus, les factures initiales ne le sont pas pour éviter un double comptage. Cela reste une **définition de métrique à rapprocher du dashboard officiel**.
-- L'API Lemon Squeezy publique ne documente pas un endpoint officiel de réconciliation exhaustive des payouts.
-- Conversion historique USD fournie par Lemon Squeezy ; une conversion EUR non disponible n'est **jamais inventée**.
-- Les abonnements n'exposent pas directement un prix récurrent fixe complet : pas de MRR estimé présenté comme confirmé.
-- La clé API reste sur l'appareil, mais une application mobile ne peut offrir les mêmes garanties qu'un proxy serveur. Sécurise le téléphone, utilise une clé dédiée et révoque-la en cas de perte.
+## Signature persistante : configuration GitHub Actions
 
-## Développement
+La clé privée persistante est **générée hors GitHub**. Pour que les prochaines APK soient signées avec le même certificat, il faut renseigner les deux secrets ci-dessous **une seule fois** dans les paramètres GitHub du dépôt :
+`Settings → Secrets and variables → Actions → New repository secret`.
 
-JDK 17, Android SDK 37, AGP 9.2.0 et Gradle 9.4.1.
+| Secret | Valeur |
+|---|---|
+| `LEMON_KEYSTORE_B64` | Contenu base64 **intégral, sur une seule ligne**, du fichier `lemon-dashboard-release.jks` |
+| `LEMON_SIGNING_PASSWORD` | Mot de passe du fichier keystore |
+
+Les deux valeurs doivent venir des fichiers privés remis au propriétaire ; le dépôt ne les contient **jamais**.
+
+Ensuite ouvrir **Actions → Signed Android release → Run workflow**. Le workflow :
+1. Restaure temporairement la clé privée depuis le secret chiffré GitHub Actions.
+2. Compile l'APK release, avec `versionCode=2`.
+3. Vérifie la signature via `apksigner verify`.
+4. Publie l'artefact `LemonDashboard-v1.1.0-persistent-signed`, téléchargeable depuis l'exécution.
+5. Supprime la copie temporaire du keystore.
+
+La signature doit rester **strictement identique** pour pouvoir mettre à jour l'application sans la désinstaller. Conserver une sauvegarde du keystore et du mot de passe dans un endroit sûr. **Ne pas changer de keystore** sur une version ultérieure.
+
+### Important si la v1.0 debug est installée
+
+La v1.0 précédente était une APK **debug signée par une autre clé**. Android ne pourra pas la remplacer par cette première release persistante : il faut désinstaller la debug **une seule fois**, puis installer la nouvelle APK signée. Cela efface aussi son cache et sa clé API locale. Toutes les futures releases **signées avec le même keystore** pourront ensuite se mettre à jour directement.
+
+## Compiler
+
+Android Gradle Plugin 9.2.0 · Gradle 9.4.1 · JDK 17 · API 37.0.
 
 ```bash
 gradle testDebugUnitTest assembleDebug
+gradle assembleRelease
 ```
 
-Les sources sont sous `app/src/main/java/com/epikaigle/lemondashboard/`.
+Sans les variables d'environnement `LEMON_KEYSTORE_PATH` et `LEMON_KEYSTORE_PASSWORD`, la variante release n'est pas signée et **ne doit pas être distribuée**.
 
-## Sécurité
+```bash
+export LEMON_KEYSTORE_PATH="/chemin/vers/lemon-dashboard-release.jks"
+export LEMON_KEYSTORE_PASSWORD="mot-de-passe-prive"
+gradle assembleRelease
+apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+```
 
-Ne jamais publier une clé API, un token, des données clients, une copie des préférences ou une clé de signature GitHub. API HTTPS uniquement, cache chiffré, sauvegardes désactivées, aucun SDK de tracking.
+Les builds de contrôle sont produits par **Android CI**, les builds signés par **Signed Android release** après installation des deux secrets.
+
+## Limitations connues
+
+- L'API publique Lemon Squeezy ne fournit pas toutes les informations nécessaires pour réconcilier les versements bancaires : consulter la console officielle.
+- Les factures initiales d'abonnement sont exclues du calcul distinct des renouvellements pour éviter de doubler la commande initiale. Vérifier les totaux sur un historique réel.
+- EUR : conversion indicative au taux disponible, pas aux cours historiques des virements.
+- Les formules d'abonnement variables peuvent ne pas avoir de prix catalogue fixe affichable.
+- L'application est personnelle et en lecture seule, sans analyse automatisée côté serveur.
+- Les tests unitaires et GitHub CI **ne remplacent pas** un test sur un Pixel 7 Pro avec une clé Lemon Squeezy valide.
