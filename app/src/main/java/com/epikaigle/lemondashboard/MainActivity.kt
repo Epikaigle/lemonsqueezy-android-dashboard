@@ -264,7 +264,7 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFF25524A), Panel)))
                 .padding(22.dp)) {
-                Text("REVENUS APRÈS REMBOURSEMENTS", color = Color(0xFFD7EDE2),
+                Text("VENTES ET REMBOURSEMENTS DATÉS", color = Color(0xFFD7EDE2),
                     fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(12.dp))
                 Text(Analytics.money(m.netUsdCents, s.currency, snapshot.eurPerUsd),
@@ -303,11 +303,23 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
                     Modifier.weight(1f))
             }
         }
+        val undated = remember(sales) { Analytics.undatedRefundUsdCents(sales) }
+        if (undated > 0L) {
+            item {
+                Explanation(
+                    "Remboursements partiels sans date : " +
+                        Analytics.money(undated, s.currency, snapshot.eurPerUsd) +
+                        ". Leur période est inconnue. " +
+                        if (s.period == Period.ALL) "Inclus dans le total historique (catégorie « Sans date »)."
+                        else "Non attribués à cette période ; choisir « Tout » pour les inclure."
+                )
+            }
+        }
         item { ChartCard(history, s.currency, snapshot.eurPerUsd) }
         if (topProducts.isNotEmpty()) {
             item {
                 Column {
-                    SectionTitle("Produits associés", "Attribution indicative")
+                    SectionTitle("Produits associés", "Net par commande")
                     Spacer(Modifier.height(10.dp))
                     topProducts.forEachIndexed { i, (product, net) ->
                         Card(colors = CardDefaults.cardColors(containerColor = Panel),
@@ -344,7 +356,7 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
                 }
             }
         }
-        item { Explanation("Montants des commandes attribués à leur premier article (commande multi-produits : classement indicatif). Les factures initiales d’abonnement ne sont pas comptées deux fois. Il s’agit de ventes, pas de bénéfices ou de virements.") }
+        item { Explanation("Solde de période : ventes datées moins remboursements entièrement datés. Les remboursements partiels sans date ne sont pas attribués aux périodes. Produits classés au net actuel de leur commande (premier article uniquement). Ce ne sont ni des bénéfices ni des versements.") }
     }
 }
 
@@ -386,26 +398,33 @@ private fun SmallMetric(title: String, value: String, modifier: Modifier = Modif
 
 @Composable
 private fun ChartCard(buckets: List<Pair<String, Long>>, currency: String, rate: Double?) {
-    val maxValue = (buckets.maxOfOrNull { it.second } ?: 0L).coerceAtLeast(1L)
+    val maxValue = (buckets.maxOfOrNull { it.second } ?: 0L).coerceAtLeast(0L)
+    val minValue = (buckets.minOfOrNull { it.second } ?: 0L).coerceAtMost(0L)
     Card(shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(containerColor = Panel)) {
         Column(Modifier.padding(18.dp)) {
-            Text("Évolution du revenu net", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text("Évolution des ventes et remboursements", fontWeight = FontWeight.Bold, fontSize = 17.sp)
             Spacer(Modifier.height(6.dp))
-            Text("Par période • paiements moins remboursements", color = Muted, fontSize = 11.sp)
+            Text("Commandes positives • remboursements datés négatifs", color = Muted, fontSize = 11.sp)
             Spacer(Modifier.height(22.dp))
             Canvas(Modifier.fillMaxWidth().height(140.dp).semantics {
-                contentDescription = "Graphique de revenus : ${buckets.size} périodes. Maximum ${Analytics.money(maxValue, currency, rate)}"
+                contentDescription = "Graphique de revenus : ${buckets.size} périodes, de ${Analytics.money(minValue, currency, rate)} à ${Analytics.money(maxValue, currency, rate)}"
             }) {
                 val count = buckets.size.coerceAtLeast(1)
                 val cell = size.width / count
+                val range = (maxValue.toDouble() - minValue.toDouble()).coerceAtLeast(1.0)
+                val zeroY = (maxValue.toDouble() / range * size.height).toFloat()
+                drawLine(color = Muted.copy(alpha = 0.45f),
+                    start = Offset(0f, zeroY), end = Offset(size.width, zeroY), strokeWidth = 1.dp.toPx())
                 buckets.forEachIndexed { index, pair ->
-                    val fraction = (pair.second.toFloat() / maxValue).coerceIn(0f, 1f)
-                    val barHeight = (fraction * (size.height - 10f)).coerceAtLeast(if (pair.second > 0) 3f else 1f)
-                    drawRoundRect(
-                        color = if (index == buckets.lastIndex) Lemon else Leaf.copy(alpha = 0.75f),
-                        topLeft = Offset(index * cell + cell * 0.19f, size.height - barHeight),
-                        size = Size(cell * 0.62f, barHeight),
+                    val delta = (pair.second.toDouble() / range * size.height).toFloat()
+                    val top = if (delta >= 0f) zeroY - delta else zeroY
+                    val barHeight = kotlin.math.abs(delta).coerceAtLeast(if (pair.second != 0L) 2.dp.toPx() else 0f)
+                    val boundedTop = top.coerceIn(0f, size.height)
+                    if (barHeight > 0f) drawRoundRect(
+                        color = if (pair.second < 0) Danger else if (index == buckets.lastIndex) Lemon else Leaf.copy(alpha = 0.75f),
+                        topLeft = Offset(index * cell + cell * 0.19f, boundedTop),
+                        size = Size(cell * 0.62f, barHeight.coerceAtMost((size.height - boundedTop).coerceAtLeast(0f))),
                         cornerRadius = CornerRadius(3.dp.toPx())
                     )
                 }
@@ -516,6 +535,13 @@ private fun SaleItem(sale: Sale, snapshot: Snapshot, currency: String) {
                 Text("${sale.source} • ${friendlyDate(sale.createdAt)}", fontSize = 11.sp, color = Muted)
                 if (sale.testMode) Text("MODE TEST", fontSize = 10.sp, color = Lemon)
                 if (!sale.paid) Text(sale.status, fontSize = 11.sp, color = Danger)
+                if (sale.usdRefundCents > 0L && sale.paid) {
+                    Text(
+                        if (sale.refundedAt.isNotBlank()) "Remboursé le ${friendlyDate(sale.refundedAt)}"
+                        else "Remboursement partiel • date indisponible",
+                        fontSize = 11.sp, color = Danger
+                    )
+                }
             }
             Spacer(Modifier.width(6.dp))
             Column(horizontalAlignment = Alignment.End) {
@@ -730,6 +756,17 @@ private fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewMode
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Inclure les commandes de test", modifier = Modifier.weight(1f))
                 Switch(checked = s.includeTest, onCheckedChange = vm::tests)
+            }
+        }
+        SettingCard("Synchronisation") {
+            Text("Mise à jour rapide : derniers 30 jours. Rapprochement complet au moins toutes les 24 h.",
+                color = Muted, fontSize = 12.sp)
+            Text("Dernier rapprochement complet : ${friendlyDateTime(snapshot.lastFullSyncAt)}",
+                color = Muted, fontSize = 12.sp)
+            OutlinedButton(onClick = vm::refreshFull, enabled = !s.loading) {
+                Icon(Icons.Default.Sync, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text("Rapprocher tout l'historique")
             }
         }
         SettingCard("Données et confidentialité") {
