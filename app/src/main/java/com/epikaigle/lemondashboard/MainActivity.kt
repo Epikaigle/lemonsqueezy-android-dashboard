@@ -247,6 +247,7 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
             .mapValues { (_, transactions) -> transactions.sumOf { it.netUsd } }
             .toList().sortedByDescending { it.second }.take(4)
     }
+    val undated = remember(sales) { Analytics.undatedRefundUsdCents(sales) }
     LazyColumn(
         contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 8.dp, bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -303,7 +304,6 @@ private fun OverviewScreen(snapshot: Snapshot, sales: List<Sale>, subs: List<Sub
                     Modifier.weight(1f))
             }
         }
-        val undated = remember(sales) { Analytics.undatedRefundUsdCents(sales) }
         if (undated > 0L) {
             item {
                 Explanation(
