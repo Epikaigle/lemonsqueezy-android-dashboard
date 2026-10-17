@@ -2,7 +2,7 @@ name: Signed Android release
 on:
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   signed-apk:
     runs-on: ubuntu-latest
@@ -58,9 +58,23 @@ jobs:
       - name: Export signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: LemonDashboard-v1.2.0-persistent-signed
+          name: LemonDashboard-v1.3.0-persistent-signed
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 90
+      - name: Publish verified signed APK
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v1.3.0"
+          cp app/build/outputs/apk/release/app-release.apk "LemonDashboard-v1.3.0.apk"
+          sha256sum "LemonDashboard-v1.3.0.apk" > "LemonDashboard-v1.3.0.apk.sha256"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "LemonDashboard-v1.3.0.apk" "LemonDashboard-v1.3.0.apk.sha256" --clobber
+          else
+            gh release create "$TAG" "LemonDashboard-v1.3.0.apk" "LemonDashboard-v1.3.0.apk.sha256" --target "$GITHUB_SHA" --title "Lemon Dashboard v1.3.0" --notes "APK signée avec le certificat persistant vérifié."
+          fi
       - name: Forget local keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/lemon-dashboard-release.jks"

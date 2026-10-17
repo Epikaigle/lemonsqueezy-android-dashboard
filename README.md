@@ -4,7 +4,7 @@ Tableau de bord personnel Android 17 pour Lemon Squeezy, conçu pour **Pixel 7 P
 
 Application Kotlin + Jetpack Compose, sans service intermédiaire : la clé API est saisie **uniquement dans l'application**, chiffrée au repos par Android Keystore. Aucun secret n'est inclus dans le dépôt public.
 
-## Fonctionnalités v1.2
+## Fonctionnalités v1.3
 
 - Ventes et renouvellements, graphiques par jour (heures), semaine, mois, année et historique complet.
 - Comparaison avec la période antérieure **sur la même durée écoulée**.
@@ -41,10 +41,10 @@ Les deux valeurs doivent venir des fichiers privés remis au propriétaire ; le 
 
 Ensuite ouvrir **Actions → Signed Android release → Run workflow**. Le workflow :
 1. Restaure temporairement la clé privée depuis le secret chiffré GitHub Actions.
-2. Compile l'APK release, avec `versionCode=3`.
+2. Compile l'APK release, avec `versionCode=4`.
 3. Vérifie la signature via `apksigner verify`.
-4. Publie l'artefact `LemonDashboard-v1.2.0-persistent-signed`, téléchargeable depuis l'exécution.
-5. Supprime la copie temporaire du keystore.
+4. Publie l'artefact `LemonDashboard-v1.3.0-persistent-signed`, téléchargeable depuis l'exécution.
+5. Publie la release GitHub v1.3.0 avec l’APK signée et son SHA-256.\n6. Supprime la copie temporaire du keystore.
 
 La signature doit rester **strictement identique** pour pouvoir mettre à jour l'application sans la désinstaller. Conserver une sauvegarde du keystore et du mot de passe dans un endroit sûr. **Ne pas changer de keystore** sur une version ultérieure.
 
@@ -81,9 +81,17 @@ Les builds de contrôle sont produits par **Android CI**, les builds signés par
 - L'application est personnelle et en lecture seule, sans analyse automatisée côté serveur.
 - Les tests unitaires et GitHub CI **ne remplacent pas** un test sur un Pixel 7 Pro avec une clé Lemon Squeezy valide.
 
-## Historique de fiabilité v1.2
+## Historique de fiabilité v1.3
 
 - Historique 100 000 transactions testé côté agrégation ; un historique réel complet n'a pas encore été confronté à un compte Lemon Squeezy.
 - Conversion EUR indicative, basée sur le taux disponible, et non sur le taux historique de chaque paiement.
 - Chargement réseau et cache sur des threads non UI pour éviter les blocages.
 - Les abonnements annulés peuvent conserver une période de grâce jusqu'à leur date d'expiration.
+
+## Synchronisation, remboursements et tests (v1.3)
+
+- L'actualisation normale relit les 30 derniers jours puis fusionne avec le cache local. Un rapprochement **complet** de toutes les transactions a lieu au moins toutes les 24 heures, et peut être lancé depuis Réglages. Une modification d'une transaction plus ancienne que 30 jours n'apparaît donc pas nécessairement avant le prochain rapprochement complet.
+- Un remboursement complet porte une date de remboursement dans l'API ; cette date est utilisée pour les graphiques et indicateurs. Les remboursements partiels peuvent être sans date : ils sont isolés dans la catégorie « Sans date » pour « Tout » plutôt que d'être attribués artificiellement à la période de l'achat.
+- Les tests JVM valident ces cas et l'ancien format de cache. La suite instrumentée Compose teste la page de connexion sur émulateur.
+- La publication de la release exige **les deux secrets de signature** déjà documentés. Elle n'est pas possible sans eux. Ne générez pas une nouvelle clé si la clé persistante existe déjà.
+- Une validation réelle sur Pixel 7 Pro avec des données Lemon Squeezy reste indispensable.
