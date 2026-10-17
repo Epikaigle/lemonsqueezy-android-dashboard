@@ -67,7 +67,7 @@ object PushNotifications {
         }
     }
 
-    suspend fun register(context: Context, origin: String, secret: String) {
+    suspend fun register(context: Context, origin: String, secret: String): PushConfig {
         require(available(context)) {
             "Firebase non configuré dans cette APK. Ajoute le fichier google-services.json à la compilation."
         }
@@ -76,9 +76,7 @@ object PushNotifications {
         endpoint(origin)
         val token = getToken()
         registerToken(origin, secret.trim(), token)
-        withContext(Dispatchers.IO) {
-            SecureStore(context).savePushConfig(PushConfig(origin.trim().trimEnd('/'), secret.trim()))
-        }
+        return PushConfig(origin.trim().trimEnd('/'), secret.trim())
     }
 
     suspend fun registerToken(origin: String, secret: String, token: String) {

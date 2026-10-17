@@ -169,15 +169,28 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun enablePush(origin: String, secret: String) {
         if (state.pushBusy) return
+        val expected = generation
         state = state.copy(pushBusy = true, pushMessage = "")
         viewModelScope.launch {
             try {
-                PushNotifications.register(getApplication(), origin, secret)
+                val config = PushNotifications.register(getApplication(), origin, secret)
+                if (expected != generation) {
+                    runCatching { PushNotifications.unregister(config.origin, config.secret) }
+                    return@launch
+                }
+                withContext(Dispatchers.IO) {
+                    synchronized(storageLock) {
+                        coroutineContext.ensureActive()
+                        if (expected != generation) throw CancellationException("Session terminée")
+                        secure.savePushConfig(config)
+                    }
+                }
+                if (expected != generation) return@launch
                 state = state.copy(pushBusy = false, pushEnabled = true,
-                    pushOrigin = origin.trim().trimEnd('/'), pushMessage = "Alertes activées.")
+                    pushOrigin = config.origin, pushMessage = "Alertes activées.")
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                state = state.copy(pushBusy = false, pushMessage =
+                if (expected == generation) state = state.copy(pushBusy = false, pushMessage =
                     error.message ?: "Activation des alertes impossible.")
             }
         }
@@ -190,16 +203,23 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             state = state.copy(pushEnabled = false, pushOrigin = "", pushMessage = "")
             return
         }
+        val expected = generation
         state = state.copy(pushBusy = true, pushMessage = "")
         viewModelScope.launch {
             try {
                 PushNotifications.unregister(config.origin, config.secret)
-                withContext(Dispatchers.IO) { secure.clearPushConfig() }
+                if (expected != generation) return@launch
+                withContext(Dispatchers.IO) {
+                    synchronized(storageLock) {
+                        if (expected == generation) secure.clearPushConfig()
+                    }
+                }
+                if (expected != generation) return@launch
                 state = state.copy(pushBusy = false, pushEnabled = false,
                     pushOrigin = "", pushMessage = "Alertes désactivées.")
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
-                state = state.copy(pushBusy = false, pushMessage =
+                if (expected == generation) state = state.copy(pushBusy = false, pushMessage =
                     "Désactivation distante impossible : " +
                         (error.message ?: "vérifie la connexion."))
             }
