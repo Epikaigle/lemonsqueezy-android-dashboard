@@ -37,6 +37,18 @@ jobs:
           umask 077
           printf '%s' "$LEMON_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/lemon-dashboard-release.jks"
           keytool -list -keystore "$RUNNER_TEMP/lemon-dashboard-release.jks" -storepass "$LEMON_SIGNING_PASSWORD" -alias lemon-dashboard-release > /dev/null
+      - name: Restore Firebase Android configuration
+        shell: bash
+        env:
+          FIREBASE_ANDROID_CONFIG_JSON: ${{ secrets.FIREBASE_ANDROID_CONFIG_JSON }}
+        run: |
+          if [[ -z "$FIREBASE_ANDROID_CONFIG_JSON" ]]; then
+            echo "::error::Configure FIREBASE_ANDROID_CONFIG_JSON with your Firebase google-services.json."
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > app/google-services.json
+          python3 -m json.tool app/google-services.json >/dev/null
       - name: Build signed APK and tests
         env:
           LEMON_KEYSTORE_PATH: ${{ runner.temp }}/lemon-dashboard-release.jks
@@ -58,7 +70,7 @@ jobs:
       - name: Export signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: LemonDashboard-v1.3.0-persistent-signed
+          name: LemonDashboard-v1.4.0-persistent-signed
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 90
       - name: Publish verified signed APK
@@ -67,14 +79,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="v1.3.0"
-          cp app/build/outputs/apk/release/app-release.apk "LemonDashboard-v1.3.0.apk"
-          sha256sum "LemonDashboard-v1.3.0.apk" > "LemonDashboard-v1.3.0.apk.sha256"
+          TAG="v1.4.0"
+          cp app/build/outputs/apk/release/app-release.apk "LemonDashboard-v1.4.0.apk"
+          sha256sum "LemonDashboard-v1.4.0.apk" > "LemonDashboard-v1.4.0.apk.sha256"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "LemonDashboard-v1.3.0.apk" "LemonDashboard-v1.3.0.apk.sha256" --clobber
+            gh release upload "$TAG" "LemonDashboard-v1.4.0.apk" "LemonDashboard-v1.4.0.apk.sha256" --clobber
           else
-            gh release create "$TAG" "LemonDashboard-v1.3.0.apk" "LemonDashboard-v1.3.0.apk.sha256" --target "$GITHUB_SHA" --title "Lemon Dashboard v1.3.0" --notes "APK signée avec le certificat persistant vérifié."
+            gh release create "$TAG" "LemonDashboard-v1.4.0.apk" "LemonDashboard-v1.4.0.apk.sha256" --target "$GITHUB_SHA" --title "Lemon Dashboard v1.4.0" --notes "APK signée avec le certificat persistant vérifié."
           fi
       - name: Forget local keystore
         if: always()
-        run: rm -f "$RUNNER_TEMP/lemon-dashboard-release.jks"
+        run: rm -f "$RUNNER_TEMP/lemon-dashboard-release.jks" app/google-services.json

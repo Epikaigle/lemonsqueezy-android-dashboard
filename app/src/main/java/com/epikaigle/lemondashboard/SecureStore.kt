@@ -110,6 +110,24 @@ class SecureStore(context: Context) {
     fun currency(): String = prefs.getString("currency", "USD") ?: "USD"
     fun saveCurrency(value: String) { prefs.edit().putString("currency", value).apply() }
 
+    fun savePushConfig(config: PushConfig) {
+        val secret = Base64.encodeToString(encrypt(config.secret.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP)
+        check(prefs.edit().putString("push_origin", config.origin)
+            .putString("push_secret", secret).commit()) { "Impossible de conserver la configuration des alertes" }
+    }
+
+    fun readPushConfig(): PushConfig? {
+        val origin = prefs.getString("push_origin", null) ?: return null
+        val encrypted = prefs.getString("push_secret", null) ?: return null
+        return runCatching {
+            PushConfig(origin, decrypt(Base64.decode(encrypted, Base64.NO_WRAP)).toString(Charsets.UTF_8))
+        }.getOrNull()
+    }
+
+    fun clearPushConfig() {
+        check(prefs.edit().remove("push_origin").remove("push_secret").commit())
+    }
+
     fun clear() {
         snapshotFile.delete()
         check(prefs.edit().clear().commit())

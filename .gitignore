@@ -16,3 +16,7 @@ captures/
 .env
 .env.*
 secrets.properties
+
+# Firebase config supplied privately at build time
+app/google-services.json
+**/google-services.json

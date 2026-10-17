@@ -3,6 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Dashboard CI builds without Firebase settings; signed releases inject google-services.json.
+if (file("google-services.json").isFile) apply(plugin = "com.google.gms.google-services")
+
 android {
     namespace = "com.epikaigle.lemondashboard"
     compileSdk = 37
@@ -11,8 +14,8 @@ android {
         applicationId = "com.epikaigle.lemondashboard"
         minSdk = 33
         targetSdk = 37
-        versionCode = 4
-        versionName = "1.3.0"
+        versionCode = 5
+        versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val releaseKeystorePath = System.getenv("LEMON_KEYSTORE_PATH")
@@ -57,6 +60,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.11.0")
     implementation("com.squareup.okhttp3:okhttp:5.5.0")
+    implementation(platform("com.google.firebase:firebase-bom:35.0.1"))
+    implementation("com.google.firebase:firebase-messaging")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20260814")
     androidTestImplementation(platform("androidx.compose:compose-bom:2026.08.00"))
