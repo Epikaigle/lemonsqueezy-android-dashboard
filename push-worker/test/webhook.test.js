@@ -64,7 +64,7 @@ test("unsigned webhook is refused before accessing the database", async () => {
     method: "POST", headers: { "x-event-name": "order_created" },
     body: JSON.stringify(data("order_created"))
   });
-  const response = await worker.fetch(request, env);
+  const response = await worker.fetch(request, { ...env, DB: {} });
   assert.equal(response.status, 401);
 });
 

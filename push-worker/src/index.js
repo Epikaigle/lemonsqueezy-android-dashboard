@@ -201,7 +201,14 @@ export async function handleWebhook(request, env) {
   const claimed = await env.DB.prepare("UPDATE events SET sent = 2, lease_until = ? " +
     "WHERE event_key = ? AND (sent = 0 OR (sent = 2 AND lease_until < ?))")
     .bind(now + 90, event.key, now).run();
-  if (!claimed.meta || claimed.meta.changes !== 1) return json({ duplicate: true });
+  if (!claimed.meta || claimed.meta.changes !== 1) {
+    const existing = await env.DB.prepare("SELECT sent FROM events WHERE event_key = ?")
+      .bind(event.key).first();
+    // An in-flight lease is not yet delivered: ask for a retry if the process crashes.
+    return existing?.sent === 1
+      ? json({ duplicate: true })
+      : json({ error: "delivery still pending" }, 503);
+  }
   try {
     const result = await sendPush(env, device.token, event);
     if (result === "unregistered") {
