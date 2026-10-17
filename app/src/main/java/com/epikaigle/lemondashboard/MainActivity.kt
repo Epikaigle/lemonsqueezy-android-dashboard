@@ -136,7 +136,7 @@ private fun LemonApp(vm: DashboardViewModel) {
                 val snapshot = s.snapshot
                 if (snapshot == null) {
                     EmptyArea("Aucune donnée synchronisée", "Vérifie la connexion Internet et actualise le tableau de bord.",
-                        vm::refresh)
+                        vm::refresh, vm::disconnect)
                 } else {
                     val filteredSales = remember(snapshot, s.selectedStore, s.includeTest) {
                         Analytics.selectedSales(snapshot, s.selectedStore, s.includeTest)
@@ -835,7 +835,7 @@ private fun EmptyCard(message: String) {
 }
 
 @Composable
-private fun EmptyArea(title: String, message: String, retry: () -> Unit) {
+private fun EmptyArea(title: String, message: String, retry: () -> Unit, disconnect: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(30.dp), verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally) {
         Icon(Icons.Default.CloudOff, contentDescription = null, modifier = Modifier.size(56.dp), tint = Muted)
@@ -844,6 +844,8 @@ private fun EmptyArea(title: String, message: String, retry: () -> Unit) {
         Text(message, color = Muted)
         Spacer(Modifier.height(14.dp))
         Button(onClick = retry) { Text("Réessayer") }
+        Spacer(Modifier.height(10.dp))
+        TextButton(onClick = disconnect) { Text("Effacer la clé et se déconnecter") }
     }
 }
 
