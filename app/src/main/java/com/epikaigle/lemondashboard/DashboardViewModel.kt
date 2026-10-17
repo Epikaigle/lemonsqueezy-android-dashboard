@@ -6,9 +6,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 data class UiState(
     val connected: Boolean = false,
@@ -27,6 +31,10 @@ data class UiState(
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
     private val secure = SecureStore(application)
     private val api = LemonApi()
+    private val storageLock = Any()
+    @Volatile private var generation = 0L
+    private var operation: Job? = null
+
     var state by mutableStateOf(UiState(
         connected = secure.readToken() != null,
         initializing = secure.readToken() != null,
@@ -38,10 +46,14 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     init {
         if (state.connected) {
-            viewModelScope.launch {
+            val expected = generation
+            operation = viewModelScope.launch {
                 val cached = withContext(Dispatchers.IO) {
-                    secure.readSnapshot()?.let { runCatching { SnapshotCodec.decode(it) }.getOrNull() }
+                    synchronized(storageLock) {
+                        secure.readSnapshot()?.let { runCatching { SnapshotCodec.decode(it) }.getOrNull() }
+                    }
                 }
+                if (expected != generation) return@launch
                 state = state.copy(snapshot = cached, initializing = false)
                 refresh()
             }
@@ -50,53 +62,83 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun connect(raw: String) {
         val token = raw.trim()
-        if (token.isEmpty()) { state = state.copy(error = "Saisis une clé API."); return }
+        if (token.isEmpty()) {
+            state = state.copy(error = "Saisis une clé API.")
+            return
+        }
         if (state.loading) return
-        viewModelScope.launch {
-            state = state.copy(loading = true, error = null, progress = "Vérification de la clé…")
+        val expected = generation
+        state = state.copy(loading = true, error = null, progress = "Vérification de la clé…")
+        operation = viewModelScope.launch {
             try {
                 api.validate(token)
-                val snapshot = api.fetch(token) { updateProgress(it) }
-                val previous = state.snapshot
-                val complete = snapshot.withFallbackFx(previous)
+                val snapshot = api.fetch(token, { updateProgress(it, expected) })
+                    .withFallbackFx(state.snapshot)
+                // Prevent an in-flight login from resurrecting data after disconnect.
                 withContext(Dispatchers.IO) {
-                    secure.saveToken(token)
-                    secure.saveSnapshot(SnapshotCodec.encode(complete))
+                    synchronized(storageLock) {
+                        coroutineContext.ensureActive()
+                        if (expected != generation) throw CancellationException("Session terminée")
+                        secure.saveToken(token)
+                        secure.saveSnapshot(SnapshotCodec.encode(snapshot))
+                        secure.saveStoreId("")
+                    }
                 }
-                secure.saveStoreId("")
+                if (expected != generation) return@launch
                 state = state.copy(connected = true, loading = false, progress = "",
-                    snapshot = complete, selectedStore = "", tab = 0)
+                    snapshot = snapshot, selectedStore = "", tab = 0)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                state = state.copy(loading = false, progress = "",
-                    error = e.message ?: "Connexion impossible. Vérifie ton réseau et ta clé API.")
+                if (expected == generation) {
+                    state = state.copy(loading = false, progress = "",
+                        error = e.message ?: "Connexion impossible. Vérifie ton réseau et ta clé API.")
+                }
             }
         }
     }
 
-    fun refresh() {
+    fun refresh() = startRefresh(forceFull = false)
+    fun refreshFull() = startRefresh(forceFull = true)
+
+    private fun startRefresh(forceFull: Boolean) {
         if (state.loading) return
         val token = secure.readToken() ?: run {
             state = state.copy(connected = false, error = "Clé introuvable, reconnecte-toi.")
             return
         }
-        viewModelScope.launch {
-            state = state.copy(loading = true, error = null, progress = "Synchronisation…")
+        val expected = generation
+        state = state.copy(loading = true, error = null, progress = "Synchronisation…")
+        operation = viewModelScope.launch {
             try {
                 api.validate(token)
-                val snapshot = api.fetch(token) { updateProgress(it) }.withFallbackFx(state.snapshot)
-                withContext(Dispatchers.IO) { secure.saveSnapshot(SnapshotCodec.encode(snapshot)) }
-                state = state.copy(loading = false, progress = "", snapshot = snapshot)
+                val previous = state.snapshot
+                val fresh = api.fetch(token, { updateProgress(it, expected) },
+                    previous = previous, forceFull = forceFull).withFallbackFx(previous)
+                withContext(Dispatchers.IO) {
+                    synchronized(storageLock) {
+                        coroutineContext.ensureActive()
+                        if (expected != generation) throw CancellationException("Session terminée")
+                        secure.saveSnapshot(SnapshotCodec.encode(fresh))
+                    }
+                }
+                if (expected != generation) return@launch
+                state = state.copy(loading = false, progress = "", snapshot = fresh)
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                state = state.copy(loading = false, progress = "",
-                    error = e.message ?: "Synchronisation impossible. Cache conservé.")
+                if (expected == generation) {
+                    state = state.copy(loading = false, progress = "",
+                        error = e.message ?: "Synchronisation impossible. Cache conservé.")
+                }
             }
         }
     }
 
-    private suspend fun updateProgress(value: String) {
-        withContext(Dispatchers.Main) { state = state.copy(progress = value) }
+    private suspend fun updateProgress(value: String, expected: Long) {
+        withContext(Dispatchers.Main) {
+            if (expected == generation) state = state.copy(progress = value)
+        }
     }
 
     private fun Snapshot.withFallbackFx(previous: Snapshot?): Snapshot =
@@ -108,8 +150,18 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun period(value: Period) { state = state.copy(period = value) }
     fun tab(value: Int) { state = state.copy(tab = value) }
     fun clearError() { state = state.copy(error = null) }
+
     fun disconnect() {
-        secure.clear()
+        generation++ // invalidate any pending work before removing data
+        operation?.cancel()
+        operation = null
+        // Serialise deletion against IO cache writes: no stale snapshot can reappear.
+        synchronized(storageLock) { secure.clear() }
         state = UiState()
+    }
+
+    override fun onCleared() {
+        operation?.cancel()
+        super.onCleared()
     }
 }
