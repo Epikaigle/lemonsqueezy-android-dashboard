@@ -72,6 +72,18 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         operation = viewModelScope.launch {
             try {
                 api.validate(token)
+                // Retain a validated token even if downloading a large history fails.
+                // The next launch can resume without requiring the user to paste it again.
+                withContext(Dispatchers.IO) {
+                    synchronized(storageLock) {
+                        coroutineContext.ensureActive()
+                        if (expected != generation) throw CancellationException("Session terminée")
+                        secure.saveToken(token)
+                        secure.saveStoreId("")
+                    }
+                }
+                if (expected != generation) return@launch
+                state = state.copy(connected = true)
                 val snapshot = api.fetch(token, { updateProgress(it, expected) })
                     .withFallbackFx(state.snapshot)
                 // Prevent an in-flight login from resurrecting data after disconnect.
@@ -79,9 +91,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                     synchronized(storageLock) {
                         coroutineContext.ensureActive()
                         if (expected != generation) throw CancellationException("Session terminée")
-                        secure.saveToken(token)
                         secure.saveSnapshot(SnapshotCodec.encode(snapshot))
-                        secure.saveStoreId("")
                     }
                 }
                 if (expected != generation) return@launch
