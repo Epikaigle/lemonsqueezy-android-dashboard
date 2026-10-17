@@ -2,7 +2,7 @@
 
 Tableau de bord personnel Android 17 pour Lemon Squeezy, conçu pour **Pixel 7 Pro**.
 
-Application Kotlin + Jetpack Compose, sans service intermédiaire : la clé API est saisie **uniquement dans l'application**, chiffrée au repos par Android Keystore. Aucun secret n'est inclus dans le dépôt public.
+Application Kotlin + Jetpack Compose. Le tableau de bord consulte l'API Lemon Squeezy **directement** ; les notifications push optionnelles passent par un relais Cloudflare distinct. La clé API est saisie **uniquement dans l'application**, chiffrée au repos par Android Keystore. Aucun secret n'est inclus dans le dépôt public.
 
 ## Fonctionnalités v1.4
 

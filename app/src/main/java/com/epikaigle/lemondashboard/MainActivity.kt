@@ -231,7 +231,7 @@ private fun LoginScreen(loading: Boolean, onConnect: (String) -> Unit) {
             Text(if (loading) "Connexion en cours…" else "Connecter ma boutique")
         }
         Spacer(Modifier.height(18.dp))
-        Text("Votre clé est chiffrée sur le téléphone. Aucun serveur intermédiaire ni publicité.",
+        Text("Votre clé est chiffrée sur le téléphone. L’accès aux ventes est direct ; les alertes optionnelles utilisent un relais séparé.",
             color = Muted, fontSize = 12.sp, lineHeight = 18.sp)
         TextButton(onClick = { uri.openUri("https://app.lemonsqueezy.com/settings/api") }) {
             Text("Créer une clé API ↗")
