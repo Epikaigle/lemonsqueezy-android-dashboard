@@ -24,7 +24,7 @@ class AnalyticsTest {
 
     @Test fun handlesRefundsWithoutNegativeNet() {
         val m = Analytics.metrics(listOf(sale("a", 2000, 500),
-            sale("b", 700, 700)), emptyList(), Period.MONTH, date)
+            sale("b", 700, 700)), emptyList(), Period.ALL, date)
         assertEquals(2700L, m.grossUsdCents)
         assertEquals(1200L, m.refundedUsdCents)
         assertEquals(1500L, m.netUsdCents)
