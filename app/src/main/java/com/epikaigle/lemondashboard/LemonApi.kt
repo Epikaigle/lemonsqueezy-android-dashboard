@@ -10,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
 import java.time.Instant
+import java.time.Duration
 import java.util.concurrent.TimeUnit
 
 class LemonApi {
@@ -71,7 +72,7 @@ class LemonApi {
         if (json.optJSONObject("data") == null) throw ApiFailure("Réponse de validation inattendue.")
     }
 
-    private suspend fun all(endpoint: String, token: String): List<JSONObject> {
+    private suspend fun all(endpoint: String, token: String, createdAfter: Instant? = null): List<JSONObject> {
         var next: String? = "https://api.lemonsqueezy.com/v1/$endpoint?page%5Bsize%5D=100"
         val seen = mutableSetOf<String>()
         val result = mutableListOf<JSONObject>()
@@ -82,7 +83,22 @@ class LemonApi {
             }
             val json = request(next, token)
             val data = json.optJSONArray("data") ?: throw ApiFailure("Liste API manquante : $endpoint.")
-            for (i in 0 until data.length()) result.add(data.getJSONObject(i))
+            var reachedCutoff = false
+            for (i in 0 until data.length()) {
+                val row = data.getJSONObject(i)
+                // Both orders and subscription-invoices are sorted by created_at descending.
+                // This local cutoff only stops pagination, it is NOT an unsupported API filter.
+                if (createdAfter != null) {
+                    val created = row.optJSONObject("attributes")?.optString("created_at")
+                        ?.let { runCatching { Instant.parse(it) }.getOrNull() }
+                    if (created != null && created.isBefore(createdAfter)) {
+                        reachedCutoff = true
+                        break
+                    }
+                }
+                result.add(row)
+            }
+            if (reachedCutoff) break
             val links = json.optJSONObject("links")
             next = if (links == null || links.isNull("next")) null
                 else links.optString("next").also { require(it.startsWith("https://")) { "Pagination invalide" } }
@@ -97,7 +113,22 @@ class LemonApi {
     private fun attr(json: JSONObject): JSONObject =
         json.optJSONObject("attributes") ?: throw ApiFailure("Attributs manquants.")
 
-    suspend fun fetch(token: String, progress: suspend (String) -> Unit): Snapshot = withContext(Dispatchers.IO) {
+    suspend fun fetch(
+        token: String,
+        progress: suspend (String) -> Unit,
+        previous: Snapshot? = null,
+        forceFull: Boolean = false
+    ): Snapshot = withContext(Dispatchers.IO) {
+        val now = Instant.now()
+        val lastComplete = previous?.lastFullSyncAt?.let {
+            runCatching { Instant.parse(it) }.getOrNull()
+        }
+        // Reconcile old refunds and edits at least every 24 hours. Intermediate manual
+        // refreshes re-fetch the last 30 days with overlap, then merge by stable ID.
+        val full = forceFull || previous == null || lastComplete == null ||
+            lastComplete.isAfter(now) || Duration.between(lastComplete, now).toHours() >= 24
+        val cutoff = if (full) null else now.minus(Duration.ofDays(30))
+        progress(if (full) "Rapprochement complet…" else "Mise à jour rapide (30 derniers jours)…")
         progress("Récupération des boutiques…")
         val stores = all("stores", token).map { s ->
             val a = attr(s)
@@ -107,12 +138,14 @@ class LemonApi {
         progress("Récupération des abonnements…")
         val rawSubs = all("subscriptions", token)
         progress("Récupération des commandes…")
-        val orders = all("orders", token)
+        val orders = all("orders", token, cutoff)
         progress("Récupération des factures récurrentes…")
-        val invoices = all("subscription-invoices", token)
+        val invoices = all("subscription-invoices", token, cutoff)
         progress("Récupération des tarifs…")
         val pricesById = if (rawSubs.isEmpty()) emptyMap() else all("prices", token).associateBy { it.optString("id") }
 
+        // For the subscription card, reuse prior invoice metadata if the newest paid
+        // invoice lies outside the fast refresh window.
         val invoiceData = invoices.map { raw -> raw to attr(raw) }
         val mostRecentPaidInvoice = invoiceData
             .filter { (_, a) -> a.str("status") in setOf("paid", "partial_refund") }
@@ -136,8 +169,8 @@ class LemonApi {
                 renewsAt = a.str("renews_at"),
                 endsAt = a.str("ends_at"),
                 testMode = a.optBoolean("test_mode"),
-                lastInvoiceUsdCents = last?.optLong("total_usd"),
-                lastInvoiceDate = last?.str("created_at") ?: "",
+                lastInvoiceUsdCents = last?.optLong("total_usd") ?: previous?.subscriptions?.firstOrNull { it.id == raw.optString("id") }?.lastInvoiceUsdCents,
+                lastInvoiceDate = last?.str("created_at") ?: previous?.subscriptions?.firstOrNull { it.id == raw.optString("id") }?.lastInvoiceDate.orEmpty(),
                 catalogPriceCents = fixedUnitCents?.times(units),
                 catalogCurrency = storeCurrency,
                 billingInterval = price?.str("renewal_interval_unit") ?: "",
@@ -145,7 +178,8 @@ class LemonApi {
             )
         }
 
-        val sales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
+        val fetchedSales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
+        val sales = if (full) fetchedSales else fetchedSales + previous!!.sales
         progress("Récupération du taux de change indicatif…")
         val fx = try {
             val response = request("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR", null, false)
@@ -162,7 +196,8 @@ class LemonApi {
             subscriptions = subscriptions.sortedByDescending { it.renewsAt },
             fetchedAt = Instant.now().toString(),
             eurPerUsd = fx.first,
-            fxDate = fx.second
+            fxDate = fx.second,
+            lastFullSyncAt = if (full) now.toString() else previous!!.lastFullSyncAt
         )
     }
 }
