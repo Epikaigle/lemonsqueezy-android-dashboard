@@ -17,7 +17,8 @@ data class Sale(
     val usdRefundCents: Long,
     val createdAt: String,
     val testMode: Boolean,
-    val subscriptionId: String = ""
+    val subscriptionId: String = "",
+    val refundedAt: String = ""
 ) {
     val paid: Boolean get() = status in setOf("paid", "refunded", "partial_refund")
     val netUsd: Long get() = if (paid) (usdCents - usdRefundCents).coerceAtLeast(0) else 0
@@ -44,7 +45,8 @@ data class Snapshot(
     val subscriptions: List<Subscription>,
     val fetchedAt: String,
     val eurPerUsd: Double? = null,
-    val fxDate: String = ""
+    val fxDate: String = "",
+    val lastFullSyncAt: String = ""
 )
 
 object SnapshotCodec {
@@ -53,6 +55,7 @@ object SnapshotCodec {
         put("fetchedAt", snapshot.fetchedAt)
         put("eurPerUsd", snapshot.eurPerUsd ?: JSONObject.NULL)
         put("fxDate", snapshot.fxDate)
+        put("lastFullSyncAt", snapshot.lastFullSyncAt)
         put("stores", JSONArray().apply {
             snapshot.stores.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("currency", it.currency)) }
         })
@@ -65,6 +68,7 @@ object SnapshotCodec {
                     put("usdCents", s.usdCents); put("usdRefundCents", s.usdRefundCents)
                     put("createdAt", s.createdAt); put("testMode", s.testMode)
                     put("subscriptionId", s.subscriptionId)
+                    put("refundedAt", s.refundedAt)
                 })
             }
         })
@@ -101,7 +105,8 @@ object SnapshotCodec {
                 originalRefundCents = it.getLong("originalRefundCents"),
                 usdCents = it.getLong("usdCents"), usdRefundCents = it.getLong("usdRefundCents"),
                 createdAt = it.getString("createdAt"), testMode = it.getBoolean("testMode"),
-                subscriptionId = it.optString("subscriptionId")
+                subscriptionId = it.optString("subscriptionId"),
+                refundedAt = it.optString("refundedAt")
             )
         }
         val subscriptions = root.getJSONArray("subscriptions").objects().map {
@@ -120,7 +125,7 @@ object SnapshotCodec {
         }
         return Snapshot(stores, sales, subscriptions, root.getString("fetchedAt"),
             if (root.isNull("eurPerUsd")) null else root.getDouble("eurPerUsd"),
-            root.optString("fxDate"))
+            root.optString("fxDate"), root.optString("lastFullSyncAt"))
     }
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }

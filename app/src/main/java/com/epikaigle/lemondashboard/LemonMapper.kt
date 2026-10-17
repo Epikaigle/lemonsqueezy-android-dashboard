@@ -27,7 +27,8 @@ internal object LemonMapper {
             usdCents = a.getLong("total_usd"),
             usdRefundCents = a.getLong("refunded_amount_usd"),
             createdAt = a.getString("created_at"),
-            testMode = a.getBoolean("test_mode")
+            testMode = a.getBoolean("test_mode"),
+            refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at")
         )
     }
 
@@ -56,7 +57,8 @@ internal object LemonMapper {
                 usdRefundCents = a.getLong("refunded_amount_usd"),
                 createdAt = a.getString("created_at"),
                 testMode = a.getBoolean("test_mode"),
-                subscriptionId = subscriptionId
+                subscriptionId = subscriptionId,
+                refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at")
             )
         }
     }

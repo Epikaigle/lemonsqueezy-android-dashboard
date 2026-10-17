@@ -47,32 +47,35 @@ object Analytics {
         }
     }
 
+    /** Full refunds have refunded_at; partial refunds often lack an event date.
+     * Never invent a refund date or backdate a partial refund to the sale day.
+     */
+    fun undatedRefundUsdCents(sales: List<Sale>): Long =
+        sales.asSequence().filter { it.paid && it.refundedAt.isBlank() }
+            .sumOf { it.usdRefundCents.coerceIn(0L, it.usdCents.coerceAtLeast(0L)) }
+
+    private fun refund(sale: Sale): Long =
+        sale.usdRefundCents.coerceIn(0L, sale.usdCents.coerceAtLeast(0L))
+
     fun metrics(sales: List<Sale>, subscriptions: List<Subscription>, period: Period, today: LocalDate = LocalDate.now()): Metrics {
         val paid = sales.filter { it.paid && inPeriod(dateOf(it.createdAt), period, today) }
         val gross = paid.sumOf { it.usdCents }
-        val refund = paid.sumOf { it.usdRefundCents.coerceAtMost(it.usdCents) }
-        return Metrics(
-            grossUsdCents = gross,
-            refundedUsdCents = refund,
-            netUsdCents = gross - refund,
-            payments = paid.size,
-            activeSubscriptions = subscriptions.count { it.status == "active" }
-        )
+        val refunds = sales.asSequence().filter { it.paid && refund(it) > 0 }
+            .filter { period == Period.ALL || inPeriod(dateOf(it.refundedAt), period, today) }
+            .sumOf { refund(it) }
+        return Metrics(gross, refunds, gross - refunds, paid.size,
+            subscriptions.count { it.status == "active" })
     }
 
-    /**
-     * Compare elapsed portions of periods, never a partial current month against a
-     * full prior month. Null means there is no sensible comparison ("Tout").
-     */
+    private fun between(date: LocalDate?, start: LocalDate, end: LocalDate): Boolean =
+        date != null && !date.isBefore(start) && !date.isAfter(end)
+
     fun previousPeriodNet(sales: List<Sale>, period: Period, today: LocalDate = LocalDate.now()): Long? {
         val start: LocalDate
         val end: LocalDate
         when (period) {
             Period.DAY -> return null
-            Period.WEEK -> {
-                start = today.minusDays(13)
-                end = today.minusDays(7)
-            }
+            Period.WEEK -> { start = today.minusDays(13); end = today.minusDays(7) }
             Period.MONTH -> {
                 start = today.minusMonths(1).withDayOfMonth(1)
                 end = start.withDayOfMonth(today.dayOfMonth.coerceAtMost(start.lengthOfMonth()))
@@ -83,64 +86,73 @@ object Analytics {
             }
             Period.ALL -> return null
         }
-        return sales.asSequence().filter { it.paid }
-            .filter { sale -> dateOf(sale.createdAt)?.let { !it.isBefore(start) && !it.isAfter(end) } == true }
-            .sumOf { it.netUsd }
+        var total = 0L
+        for (sale in sales) {
+            if (!sale.paid) continue
+            if (between(dateOf(sale.createdAt), start, end)) total += sale.usdCents
+            if (between(dateOf(sale.refundedAt), start, end)) total -= refund(sale)
+        }
+        return total
     }
 
-    /**
-     * Linear-time aggregation for long histories: 100k+ transactions must not require
-     * a separate full scan for each graph bucket.
-     */
+    /** One linear pass; a separate undated bucket reconciles lifetime partial refunds. */
     fun graphBuckets(sales: List<Sale>, period: Period, today: LocalDate = LocalDate.now()): List<Pair<String, Long>> {
-        if (period == Period.DAY) {
-            val hours = LongArray(24)
-            sales.forEach { sale ->
-                if (!sale.paid) return@forEach
-                val instant = runCatching { Instant.parse(sale.createdAt) }.getOrNull() ?: return@forEach
-                val local = instant.atZone(ZoneId.systemDefault())
-                if (local.toLocalDate() == today) hours[local.hour] += sale.netUsd
-            }
-            return (0..23).map { "${it}h" to hours[it] }
-        }
+        val hours = LongArray(24)
         val grouped = HashMap<String, Long>()
         var firstYear = today.year
+        var undated = 0L
+        fun record(iso: String, amount: Long) {
+            if (amount == 0L) return
+            val day = dateOf(iso) ?: return
+            if (!inPeriod(day, period, today)) return
+            if (period == Period.DAY) {
+                val hour = runCatching { Instant.parse(iso).atZone(ZoneId.systemDefault()).hour }.getOrNull() ?: return
+                hours[hour] += amount
+                return
+            }
+            val key = when (period) {
+                Period.WEEK, Period.MONTH -> day.toString()
+                Period.YEAR -> YearMonth.from(day).toString()
+                Period.ALL -> day.year.toString()
+                Period.DAY -> error("already handled")
+            }
+            grouped[key] = (grouped[key] ?: 0L) + amount
+            if (day.year < firstYear) firstYear = day.year
+        }
         sales.forEach { sale ->
             if (!sale.paid) return@forEach
-            val date = dateOf(sale.createdAt) ?: return@forEach
-            if (!inPeriod(date, period, today)) return@forEach
-            val key = when (period) {
-                Period.DAY -> error("already handled")
-                Period.WEEK, Period.MONTH -> date.toString()
-                Period.YEAR -> YearMonth.from(date).toString()
-                Period.ALL -> date.year.toString()
+            record(sale.createdAt, sale.usdCents)
+            val amount = refund(sale)
+            if (amount > 0) {
+                if (sale.refundedAt.isNotBlank()) record(sale.refundedAt, -amount)
+                else undated += amount
             }
-            grouped[key] = (grouped[key] ?: 0L) + sale.netUsd
-            if (date.year < firstYear) firstYear = date.year
         }
-        val buckets = when (period) {
-            Period.DAY -> error("already handled")
+        if (period == Period.DAY) return (0..23).map { "${it}h" to hours[it] }
+        val days = when (period) {
             Period.WEEK -> (6 downTo 0).map { today.minusDays(it.toLong()) }
             Period.MONTH -> (1..today.lengthOfMonth()).map { today.withDayOfMonth(it) }
             Period.YEAR -> (1..12).map { today.withMonth(it).withDayOfMonth(1) }
             Period.ALL -> (firstYear..today.year).map { LocalDate.of(it, 1, 1) }
+            Period.DAY -> error("already handled")
         }
-        return buckets.map { day ->
+        val buckets = days.map { day ->
             val key = when (period) {
-                Period.DAY -> error("already handled")
                 Period.WEEK, Period.MONTH -> day.toString()
                 Period.YEAR -> YearMonth.from(day).toString()
                 Period.ALL -> day.year.toString()
+                Period.DAY -> error("already handled")
             }
             val label = when (period) {
-                Period.DAY -> error("already handled")
                 Period.WEEK -> "${day.dayOfMonth}/${day.monthValue}"
                 Period.MONTH -> day.dayOfMonth.toString()
                 Period.YEAR -> day.monthValue.toString()
                 Period.ALL -> day.year.toString()
+                Period.DAY -> error("already handled")
             }
             label to (grouped[key] ?: 0L)
         }
+        return if (period == Period.ALL && undated != 0L) buckets + ("Sans date" to -undated) else buckets
     }
 
     fun money(usdCents: Long, currency: String, eurPerUsd: Double?): String {
