@@ -1,6 +1,10 @@
 package com.epikaigle.lemondashboard
 
 import android.os.Bundle
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -60,6 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
+        PushNotifications.createChannel(this)
         setContent {
             MaterialTheme(colorScheme = themeColors) {
                 val vm: DashboardViewModel = viewModel()
@@ -758,6 +763,7 @@ private fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewMode
                 Switch(checked = s.includeTest, onCheckedChange = vm::tests)
             }
         }
+        PushSettings(vm, s)
         SettingCard("Synchronisation") {
             Text("Mise à jour rapide : derniers 30 jours. Rapprochement complet au moins toutes les 24 h.",
                 color = Muted, fontSize = 12.sp)
@@ -795,6 +801,59 @@ private fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewMode
             },
             dismissButton = { TextButton(onClick = { confirm = false }) { Text("Annuler") } }
         )
+    }
+}
+
+@Composable
+private fun PushSettings(vm: DashboardViewModel, s: UiState) {
+    val context = LocalContext.current
+    var origin by remember { mutableStateOf(s.pushOrigin) }
+    var pairingSecret by remember { mutableStateOf("") }
+    var reveal by remember { mutableStateOf(false) }
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) vm.enablePush(origin, pairingSecret)
+    }
+    SettingCard("Notifications instantanées") {
+        Text("Ventes, renouvellements et remboursements, même lorsque l'application est fermée.",
+            color = Muted, fontSize = 12.sp)
+        if (!PushNotifications.available(context)) {
+            Text("Firebase n'est pas configuré dans cette APK. La release doit inclure ta configuration Firebase.",
+                color = Danger, fontSize = 12.sp)
+        } else if (s.pushEnabled) {
+            Text("Notifications activées", color = Leaf, fontWeight = FontWeight.SemiBold)
+            Text("Relais : " + s.pushOrigin, color = Muted, fontSize = 11.sp)
+            OutlinedButton(onClick = vm::disablePush, enabled = !s.pushBusy) {
+                Text("Désactiver les alertes")
+            }
+        } else {
+            OutlinedTextField(value = origin, onValueChange = { origin = it },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("Adresse HTTPS du relais") },
+                placeholder = { Text("https://mon-worker.workers.dev") })
+            OutlinedTextField(value = pairingSecret, onValueChange = { pairingSecret = it },
+                modifier = Modifier.fillMaxWidth(), singleLine = true,
+                label = { Text("Secret d'appairage") },
+                visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { reveal = !reveal }) {
+                        Icon(if (reveal) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = if (reveal) "Masquer le secret" else "Afficher le secret")
+                    }
+                })
+            Button(onClick = {
+                if (PushNotifications.permissionGranted(context)) vm.enablePush(origin, pairingSecret)
+                else permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }, enabled = !s.pushBusy && origin.isNotBlank() && pairingSecret.isNotBlank()) {
+                Text(if (s.pushBusy) "Connexion…" else "Activer les notifications")
+            }
+            Text("Secret chiffré sur ce téléphone. Aucune clé API Lemon Squeezy n'est envoyée au relais.",
+                color = Muted, fontSize = 11.sp)
+        }
+        if (s.pushMessage.isNotBlank()) {
+            Text(s.pushMessage, color = if (s.pushEnabled) Leaf else Danger, fontSize = 12.sp)
+        }
     }
 }
 
