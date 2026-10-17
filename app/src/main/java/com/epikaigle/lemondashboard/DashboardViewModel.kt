@@ -25,7 +25,11 @@ data class UiState(
     val includeTest: Boolean = false,
     val currency: String = "USD",
     val period: Period = Period.MONTH,
-    val tab: Int = 0
+    val tab: Int = 0,
+    val pushEnabled: Boolean = false,
+    val pushOrigin: String = "",
+    val pushBusy: Boolean = false,
+    val pushMessage: String = ""
 )
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
@@ -40,7 +44,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         initializing = secure.readToken() != null,
         selectedStore = secure.storeId(),
         includeTest = secure.showTests(),
-        currency = secure.currency()
+        currency = secure.currency(),
+        pushEnabled = secure.readPushConfig() != null,
+        pushOrigin = secure.readPushConfig()?.origin.orEmpty()
     ))
         private set
 
@@ -161,13 +167,61 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun tab(value: Int) { state = state.copy(tab = value) }
     fun clearError() { state = state.copy(error = null) }
 
+    fun enablePush(origin: String, secret: String) {
+        if (state.pushBusy) return
+        state = state.copy(pushBusy = true, pushMessage = "")
+        viewModelScope.launch {
+            try {
+                PushNotifications.register(getApplication(), origin, secret)
+                state = state.copy(pushBusy = false, pushEnabled = true,
+                    pushOrigin = origin.trim().trimEnd('/'), pushMessage = "Alertes activées.")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                state = state.copy(pushBusy = false, pushMessage =
+                    error.message ?: "Activation des alertes impossible.")
+            }
+        }
+    }
+
+    fun disablePush() {
+        if (state.pushBusy) return
+        val config = secure.readPushConfig()
+        if (config == null) {
+            state = state.copy(pushEnabled = false, pushOrigin = "", pushMessage = "")
+            return
+        }
+        state = state.copy(pushBusy = true, pushMessage = "")
+        viewModelScope.launch {
+            try {
+                PushNotifications.unregister(config.origin, config.secret)
+                withContext(Dispatchers.IO) { secure.clearPushConfig() }
+                state = state.copy(pushBusy = false, pushEnabled = false,
+                    pushOrigin = "", pushMessage = "Alertes désactivées.")
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                state = state.copy(pushBusy = false, pushMessage =
+                    "Désactivation distante impossible : " +
+                        (error.message ?: "vérifie la connexion."))
+            }
+        }
+    }
+
     fun disconnect() {
         generation++ // invalidate any pending work before removing data
         operation?.cancel()
         operation = null
-        // Serialise deletion against IO cache writes: no stale snapshot can reappear.
+        val push = secure.readPushConfig()
+        // Best-effort remote unregistration and FCM token revocation.
         synchronized(storageLock) { secure.clear() }
         state = UiState()
+        if (push != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                runCatching { PushNotifications.unregister(push.origin, push.secret) }
+                if (PushNotifications.available(getApplication())) {
+                    com.google.firebase.messaging.FirebaseMessaging.getInstance().deleteToken()
+                }
+            }
+        }
     }
 
     override fun onCleared() {
