@@ -196,9 +196,12 @@ export async function handleWebhook(request, env) {
   // D1 unique key enforces idempotency even under concurrent webhook deliveries.
   await env.DB.prepare("INSERT OR IGNORE INTO events(event_key, sent, created_at) VALUES (?, 0, ?)")
     .bind(event.key, Math.floor(Date.now() / 1000)).run();
-  const row = await env.DB.prepare("SELECT sent FROM events WHERE event_key = ?")
-    .bind(event.key).first();
-  if (row?.sent) return json({ duplicate: true });
+  // Claim an at-most-once send lease (90 seconds) atomically, even with concurrent retries.
+  const now = Math.floor(Date.now() / 1000);
+  const claimed = await env.DB.prepare("UPDATE events SET sent = 2, lease_until = ? " +
+    "WHERE event_key = ? AND (sent = 0 OR (sent = 2 AND lease_until < ?))")
+    .bind(now + 90, event.key, now).run();
+  if (!claimed.meta || claimed.meta.changes !== 1) return json({ duplicate: true });
   try {
     const result = await sendPush(env, device.token, event);
     if (result === "unregistered") {
@@ -207,7 +210,9 @@ export async function handleWebhook(request, env) {
     await env.DB.prepare("UPDATE events SET sent = 1 WHERE event_key = ?").bind(event.key).run();
     return json({ delivered: result === "sent" });
   } catch {
-    // Do not lose transient failures: Lemon Squeezy will retry non-2xx responses.
+    await env.DB.prepare("UPDATE events SET sent = 0, lease_until = 0 WHERE event_key = ? AND sent = 2")
+      .bind(event.key).run();
+    // Lemon Squeezy will retry non-2xx responses.
     return json({ error: "temporary delivery failure" }, 503);
   }
 }
