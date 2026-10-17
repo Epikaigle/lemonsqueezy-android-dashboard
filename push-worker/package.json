@@ -1,0 +1,13 @@
+{
+  "name": "lemon-dashboard-push",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "deploy": "wrangler deploy",
+    "db": "wrangler d1 execute lemon-dashboard-push --remote --file=./schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

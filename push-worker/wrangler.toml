@@ -1,0 +1,13 @@
+name = "lemon-dashboard-push"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+FIREBASE_PROJECT_ID = "REPLACE_WITH_YOUR_FIREBASE_PROJECT_ID"
+ALLOWED_STORE_IDS = "REPLACE_WITH_YOUR_LEMON_STORE_ID"
+ALLOW_TEST_MODE = "false"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lemon-dashboard-push"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
