@@ -4,9 +4,10 @@ Tableau de bord personnel Android 17 pour Lemon Squeezy, conçu pour **Pixel 7 P
 
 Application Kotlin + Jetpack Compose, sans service intermédiaire : la clé API est saisie **uniquement dans l'application**, chiffrée au repos par Android Keystore. Aucun secret n'est inclus dans le dépôt public.
 
-## Fonctionnalités v1.3
+## Fonctionnalités v1.4
 
 - Ventes et renouvellements, graphiques par jour (heures), semaine, mois, année et historique complet.
+- Notifications push optionnelles pour ventes, renouvellements et remboursements (Firebase + Worker sécurisé).
 - Comparaison avec la période antérieure **sur la même durée écoulée**.
 - Top produits, brut, remboursements et net après remboursement.
 - Recherche et filtres : transactions payées, remboursées, non encaissées.
@@ -41,10 +42,10 @@ Les deux valeurs doivent venir des fichiers privés remis au propriétaire ; le 
 
 Ensuite ouvrir **Actions → Signed Android release → Run workflow**. Le workflow :
 1. Restaure temporairement la clé privée depuis le secret chiffré GitHub Actions.
-2. Compile l'APK release, avec `versionCode=4`.
+2. Compile l'APK release, avec `versionCode=5`.
 3. Vérifie la signature via `apksigner verify`.
-4. Publie l'artefact `LemonDashboard-v1.3.0-persistent-signed`, téléchargeable depuis l'exécution.
-5. Publie la release GitHub v1.3.0 avec l’APK signée et son SHA-256.
+4. Publie l'artefact `LemonDashboard-v1.4.0-persistent-signed`, téléchargeable depuis l'exécution.
+5. Publie la release GitHub v1.4.0 avec l’APK signée et son SHA-256.
 6. Supprime la copie temporaire du keystore.
 
 La signature doit rester **strictement identique** pour pouvoir mettre à jour l'application sans la désinstaller. Conserver une sauvegarde du keystore et du mot de passe dans un endroit sûr. **Ne pas changer de keystore** sur une version ultérieure.
@@ -82,14 +83,25 @@ Les builds de contrôle sont produits par **Android CI**, les builds signés par
 - L'application est personnelle et en lecture seule, sans analyse automatisée côté serveur.
 - Les tests unitaires et GitHub CI **ne remplacent pas** un test sur un Pixel 7 Pro avec une clé Lemon Squeezy valide.
 
-## Historique de fiabilité v1.3
+
+## Notifications push (v1.4)
+
+La version v1.4 ajoute **les notifications de ventes, renouvellements et remboursements**, reçues via Firebase Cloud Messaging même lorsque l'application Android est fermée. Les factures initiales d'abonnement ne déclenchent pas de doublon. Les webhooks sont authentifiés par HMAC-SHA256 ; les envois sont filtrés par boutique et dédoublonnés avec une base Cloudflare D1.
+
+**Configuration externe obligatoire** : crée un projet Firebase Android et un Cloudflare Worker, configure les secrets de webhook et de notification, puis compile une **APK signée avec le fichier google-services.json** du projet Firebase. Le workflow de release exige désormais aussi le secret GitHub **FIREBASE_ANDROID_CONFIG_JSON**. Aucune clé privée Firebase ou API Lemon Squeezy n'est intégrée au dépôt public.
+
+Une fois configurée et installée : **Réglages → Notifications instantanées** pour saisir l'URL HTTPS du relais et le secret d'appairage, autoriser les notifications Android et activer les alertes. L'application reste utilisable sans Firebase, mais les notifications restent désactivées.
+
+**Guide intégral** : [Déployer le relais et activer les notifications](push-worker/README.md). Les notifications ne sont pas garanties à la seconde et doivent être testées sur le Pixel réel. La version actuelle sur GitHub **ne signifie pas que le relais a déjà été déployé ou que des alertes arrivent** : l'infrastructure externe reste à connecter.
+
+## Historique de fiabilité v1.4
 
 - Historique 100 000 transactions testé côté agrégation ; un historique réel complet n'a pas encore été confronté à un compte Lemon Squeezy.
 - Conversion EUR indicative, basée sur le taux disponible, et non sur le taux historique de chaque paiement.
 - Chargement réseau et cache sur des threads non UI pour éviter les blocages.
 - Les abonnements annulés peuvent conserver une période de grâce jusqu'à leur date d'expiration.
 
-## Synchronisation, remboursements et tests (v1.3)
+## Synchronisation, remboursements et tests (v1.4)
 
 - L'actualisation normale relit les 30 derniers jours puis fusionne avec le cache local. Un rapprochement **complet** de toutes les transactions a lieu au moins toutes les 24 heures, et peut être lancé depuis Réglages. Une modification d'une transaction plus ancienne que 30 jours n'apparaît donc pas nécessairement avant le prochain rapprochement complet.
 - Un remboursement complet porte une date de remboursement dans l'API ; cette date est utilisée pour les graphiques et indicateurs. Les remboursements partiels peuvent être sans date : ils sont isolés dans la catégorie « Sans date » pour « Tout » plutôt que d'être attribués artificiellement à la période de l'achat.
