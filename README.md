@@ -44,7 +44,8 @@ Ensuite ouvrir **Actions → Signed Android release → Run workflow**. Le workf
 2. Compile l'APK release, avec `versionCode=4`.
 3. Vérifie la signature via `apksigner verify`.
 4. Publie l'artefact `LemonDashboard-v1.3.0-persistent-signed`, téléchargeable depuis l'exécution.
-5. Publie la release GitHub v1.3.0 avec l’APK signée et son SHA-256.\n6. Supprime la copie temporaire du keystore.
+5. Publie la release GitHub v1.3.0 avec l’APK signée et son SHA-256.
+6. Supprime la copie temporaire du keystore.
 
 La signature doit rester **strictement identique** pour pouvoir mettre à jour l'application sans la désinstaller. Conserver une sauvegarde du keystore et du mot de passe dans un endroit sûr. **Ne pas changer de keystore** sur une version ultérieure.
 
