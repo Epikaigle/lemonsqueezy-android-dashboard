@@ -61,4 +61,16 @@ class LemonMapperTest {
             LemonMapper.orders(listOf(bad))
         }
     }
+    @Test fun mapsFullRefundDateButNotUnknownPartialDate() {
+        val full = row("10", mapOf("status" to "refunded",
+            "refunded_amount" to 1299, "refunded_amount_usd" to 1299,
+            "refunded_at" to "2026-10-17T12:00:00Z"))
+        val partial = row("11", mapOf("status" to "partial_refund",
+            "refunded_amount" to 100, "refunded_amount_usd" to 100,
+            "refunded_at" to JSONObject.NULL))
+        val mapped = LemonMapper.orders(listOf(full, partial))
+        assertEquals("2026-10-17T12:00:00Z", mapped[0].refundedAt)
+        assertEquals("", mapped[1].refundedAt)
+    }
+
 }

@@ -97,4 +97,31 @@ class AnalyticsTest {
             Period.ALL, date)
         assertEquals(1, m.activeSubscriptions)
     }
+    @Test fun fullRefundBelongsToActualRefundPeriod() {
+        val refunded = sale("full", 1800L, refund = 1800L, status = "refunded",
+            at = "2026-09-10T09:00:00Z").copy(refundedAt = "2026-10-12T11:00:00Z")
+        val october = Analytics.metrics(listOf(refunded), emptyList(), Period.MONTH, date)
+        assertEquals(0L, october.grossUsdCents)
+        assertEquals(1800L, october.refundedUsdCents)
+        assertEquals(-1800L, october.netUsdCents)
+        assertEquals(-1800L, Analytics.graphBuckets(listOf(refunded), Period.MONTH, date)
+            .first { it.first == "12" }.second)
+    }
+
+    @Test fun partialRefundWithUnknownDateIsNotBackdated() {
+        val partial = sale("partial", 2000L, refund = 500L, status = "partial_refund",
+            at = "2026-09-10T09:00:00Z")
+        assertEquals(0L, Analytics.metrics(listOf(partial), emptyList(), Period.MONTH, date).netUsdCents)
+        assertEquals(1500L, Analytics.metrics(listOf(partial), emptyList(), Period.ALL, date).netUsdCents)
+        assertEquals(500L, Analytics.undatedRefundUsdCents(listOf(partial)))
+        assertEquals(-500L, Analytics.graphBuckets(listOf(partial), Period.ALL, date).last().second)
+        assertEquals("Sans date", Analytics.graphBuckets(listOf(partial), Period.ALL, date).last().first)
+    }
+
+    @Test fun priorPeriodUsesRefundDateInsteadOfSaleDate() {
+        val refunded = sale("ref", 1000, refund = 1000, status = "refunded",
+            at = "2026-08-01T11:00:00Z").copy(refundedAt = "2026-09-05T09:00:00Z")
+        assertEquals(-1000L, Analytics.previousPeriodNet(listOf(refunded), Period.MONTH, date))
+    }
+
 }
