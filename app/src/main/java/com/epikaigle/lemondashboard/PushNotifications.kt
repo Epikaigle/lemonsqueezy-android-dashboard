@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
 package com.epikaigle.lemondashboard
 
 import android.Manifest
@@ -128,11 +129,12 @@ object PushNotifications {
         val manager = context.getSystemService(NotificationManager::class.java)
         val intent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            putExtra("navigate_to_tab", 1)
         }
         val pending = PendingIntent.getActivity(context, 0, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_more)
+            .setSmallIcon(R.drawable.ic_launcher_monochrome)
             .setContentTitle(title.take(100))
             .setContentText(message.take(220))
             .setStyle(Notification.BigTextStyle().bigText(message.take(220)))

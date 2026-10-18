@@ -27,9 +27,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import android.content.Intent
+import androidx.activity.viewModels
 
 class MainActivity : ComponentActivity() {
+    private val vm: DashboardViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -37,14 +40,27 @@ class MainActivity : ComponentActivity() {
             window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         }
         PushNotifications.createChannel(this)
+        handleNotificationIntent(intent)
         setContent {
             MaterialTheme(
                 colorScheme = LemonDashboardColorScheme,
                 shapes = AppShapes
             ) {
-                val vm: DashboardViewModel = viewModel()
                 LemonApp(vm)
             }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleNotificationIntent(intent)
+    }
+
+    private fun handleNotificationIntent(intent: Intent?) {
+        val targetTab = intent?.getIntExtra("navigate_to_tab", -1) ?: -1
+        if (targetTab in 0..4) {
+            vm.tab(targetTab)
         }
     }
 }

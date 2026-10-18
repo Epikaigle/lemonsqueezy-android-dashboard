@@ -2,6 +2,7 @@
 package com.epikaigle.lemondashboard
 
 import android.Manifest
+import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -31,9 +33,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -487,9 +491,11 @@ fun OverviewScreen(
 
 @Composable
 fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: DashboardViewModel) {
+    val focusManager = LocalFocusManager.current
     val today = remember { LocalDate.now() }
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableIntStateOf(0) }
+    var sortByAmountDesc by remember { mutableStateOf(false) }
     var selectedSaleForDetail by remember { mutableStateOf<Sale?>(null) }
 
     val inPeriod = remember(sales, s.period) {
@@ -506,6 +512,13 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                     3 -> !sale.paid
                     else -> true
                 }
+        }
+    }
+    val sortedRows = remember(rows, sortByAmountDesc) {
+        if (sortByAmountDesc) {
+            rows.sortedByDescending { it.netUsd }
+        } else {
+            rows.sortedByDescending { it.createdAt }
         }
     }
 
@@ -538,6 +551,8 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                         }
                     }
                 },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Lemon,
@@ -595,14 +610,39 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("${rows.size} transaction(s) trouvée(s)", color = TextSecondary, fontSize = 12.sp)
-                Text("${inPeriod.size} sur la période", color = TextMuted, fontSize = 12.sp)
+                Text("${sortedRows.size} transaction(s) trouvée(s)", color = TextSecondary, fontSize = 12.sp)
+                Surface(
+                    color = if (sortByAmountDesc) LemonContainer else DarkSurfaceVariant,
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(1.dp, if (sortByAmountDesc) Lemon else DarkBorder),
+                    modifier = Modifier.clickable { sortByAmountDesc = !sortByAmountDesc }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SwapVert,
+                            contentDescription = null,
+                            tint = if (sortByAmountDesc) Lemon else TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (sortByAmountDesc) "Montant ↓" else "Date ↓",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (sortByAmountDesc) Lemon else TextSecondary
+                        )
+                    }
+                }
             }
         }
 
-        if (rows.isEmpty()) {
+        if (sortedRows.isEmpty()) {
             item {
                 EmptyStateView(
                     icon = Icons.Default.ReceiptLong,
@@ -614,7 +654,7 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                 )
             }
         } else {
-            items(rows, key = { it.id }) { sale ->
+            items(sortedRows, key = { it.id }) { sale ->
                 SaleItemCard(
                     sale = sale,
                     snapshot = snapshot,
@@ -731,6 +771,7 @@ fun SubscriptionsScreen(
     s: UiState,
     vm: DashboardViewModel
 ) {
+    val focusManager = LocalFocusManager.current
     var query by remember { mutableStateOf("") }
     var filter by remember { mutableIntStateOf(0) }
     var selectedSubForDetail by remember { mutableStateOf<Subscription?>(null) }
@@ -870,6 +911,8 @@ fun SubscriptionsScreen(
                         }
                     }
                 },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
                 shape = RoundedCornerShape(16.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Lemon,
@@ -1248,6 +1291,7 @@ fun TimelineStep(step: Int, title: String, description: String, isDone: Boolean)
 
 @Composable
 fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
+    val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
 
@@ -1361,6 +1405,50 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                 Icon(Icons.Default.Sync, contentDescription = null, tint = Lemon)
                 Spacer(Modifier.width(8.dp))
                 Text("Rapprocher tout l'historique", color = Lemon, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Export / Share Summary
+        DashboardCard {
+            Text("Partage du bilan", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Exportez un récapitulatif synthétique de vos indicateurs clés (revenu net, MRR, commandes) sans aucune donnée personnelle ou confidentielle.",
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 17.sp
+            )
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                onClick = {
+                    val mrr = Analytics.mrrEstimateUsdCents(snapshot.subscriptions)
+                    val paidSales = snapshot.sales.filter { it.paid }
+                    val totalNet = paidSales.sumOf { it.netUsd }
+                    val activeSubs = snapshot.subscriptions.count { it.status == "active" }
+                    val storeNames = snapshot.stores.joinToString { it.name }.ifBlank { "Toutes" }
+                    val summaryText = buildString {
+                        appendLine("📊 Lemon Squeezy — Bilan d'activité")
+                        appendLine("• Boutiques synchronisées : $storeNames")
+                        appendLine("• Revenu net cumulé : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
+                        appendLine("• Transactions payées : ${paidSales.size}")
+                        appendLine("• Abonnements actifs : $activeSubs")
+                        appendLine("• MRR estimé : ${Analytics.money(mrr, s.currency, snapshot.eurPerUsd)}")
+                        appendLine("• Synchronisé le : ${friendlyDateTime(snapshot.fetchedAt)}")
+                    }
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "Bilan Lemon Squeezy")
+                        putExtra(Intent.EXTRA_TEXT, summaryText)
+                    }
+                    context.startActivity(Intent.createChooser(sendIntent, "Partager le bilan"))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Partager le récapitulatif", color = Lemon, fontWeight = FontWeight.Bold)
             }
         }
 

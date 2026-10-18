@@ -1,6 +1,7 @@
 package com.epikaigle.lemondashboard
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -128,6 +129,16 @@ class LemonApi {
         val full = forceFull || previous == null || lastComplete == null ||
             lastComplete.isAfter(now) || Duration.between(lastComplete, now).toHours() >= 24
         val cutoff = if (full) null else now.minus(Duration.ofDays(30))
+        val fxDeferred = async(Dispatchers.IO) {
+            try {
+                val response = request("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR", null, false)
+                val rate = response.optJSONObject("rates")?.optDouble("EUR")?.takeIf { it.isFinite() && it > 0 }
+                rate to response.optString("date")
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                null to ""
+            }
+        }
         progress(if (full) "Rapprochement complet…" else "Mise à jour rapide (30 derniers jours)…")
         progress("Récupération des boutiques…")
         val stores = all("stores", token).map { s ->
@@ -180,15 +191,8 @@ class LemonApi {
 
         val fetchedSales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
         val sales = if (full) fetchedSales else fetchedSales + previous!!.sales
-        progress("Récupération du taux de change indicatif…")
-        val fx = try {
-            val response = request("https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR", null, false)
-            val rate = response.optJSONObject("rates")?.optDouble("EUR")?.takeIf { it.isFinite() && it > 0 }
-            rate to response.optString("date")
-        } catch (error: Exception) {
-            if (error is kotlinx.coroutines.CancellationException) throw error
-            null to ""
-        }
+        progress("Finalisation de la synchronisation…")
+        val fx = fxDeferred.await()
 
         Snapshot(
             stores = stores,

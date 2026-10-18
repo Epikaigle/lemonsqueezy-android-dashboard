@@ -1,3 +1,4 @@
+@file:Suppress("DEPRECATION")
 package com.epikaigle.lemondashboard
 
 import android.app.Application
@@ -61,7 +62,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 if (expected != generation) return@launch
                 state = state.copy(snapshot = cached, initializing = false)
-                refresh()
+                startRefresh(forceFull = false, isSilent = true)
             }
         }
     }
@@ -114,20 +115,19 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    fun refresh() = startRefresh(forceFull = false)
-    fun refreshFull() = startRefresh(forceFull = true)
+    fun refresh() = startRefresh(forceFull = false, isSilent = false)
+    fun refreshFull() = startRefresh(forceFull = true, isSilent = false)
 
-    private fun startRefresh(forceFull: Boolean) {
+    private fun startRefresh(forceFull: Boolean, isSilent: Boolean = false) {
         if (state.loading) return
         val token = secure.readToken() ?: run {
             state = state.copy(connected = false, error = "Clé introuvable, reconnecte-toi.")
             return
         }
         val expected = generation
-        state = state.copy(loading = true, error = null, progress = "Synchronisation…")
+        state = state.copy(loading = true, error = if (isSilent) state.error else null, progress = "Synchronisation…")
         operation = viewModelScope.launch {
             try {
-                api.validate(token)
                 val previous = state.snapshot
                 val fresh = api.fetch(token, { updateProgress(it, expected) },
                     previous = previous, forceFull = forceFull).withFallbackFx(previous)
@@ -144,8 +144,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 throw e
             } catch (e: Exception) {
                 if (expected == generation) {
-                    state = state.copy(loading = false, progress = "",
-                        error = e.message ?: "Synchronisation impossible. Cache conservé.")
+                    val errorMessage = if (isSilent && state.snapshot != null) null
+                        else e.message ?: "Synchronisation impossible. Cache conservé."
+                    state = state.copy(loading = false, progress = "", error = errorMessage)
                 }
             }
         }
