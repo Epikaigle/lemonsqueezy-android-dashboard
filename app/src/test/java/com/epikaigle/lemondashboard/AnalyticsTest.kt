@@ -148,5 +148,92 @@ class AnalyticsTest {
         assertEquals(3900L, mrr)
         assertEquals(3900L * 12L, Analytics.arrEstimateUsdCents(listOf(monthly, yearly, cancelled)))
     }
+
+    @Test fun calculatesTopProductsRankedByRevenue() {
+        val sales = listOf(
+            sale("1", 2000, status = "paid").copy(product = "Plugin Pro"),
+            sale("2", 3000, status = "paid").copy(product = "Desktop App"),
+            sale("3", 5000, status = "paid").copy(product = "Plugin Pro"),
+            sale("4", 1000, status = "refunded", refund = 1000).copy(product = "Desktop App"),
+            sale("5", 500, status = "pending").copy(product = "Mobile App")
+        )
+        val top = Analytics.topProducts(sales)
+        assertEquals(2, top.size)
+        assertEquals("Plugin Pro", top[0].name)
+        assertEquals(7000L, top[0].grossUsdCents)
+        assertEquals(2, top[0].salesCount)
+
+        assertEquals("Desktop App", top[1].name)
+        assertEquals(4000L, top[1].grossUsdCents)
+        assertEquals(3000L, top[1].netUsdCents)
+        assertEquals(2, top[1].salesCount)
+    }
+
+    @Test fun calculatesSaaSChurnRateAndQuickRatio() {
+        val subs = listOf(
+            Subscription("1", "1", "SaaS", "", "active", "", "", false, 2900L),
+            Subscription("2", "1", "SaaS", "", "active", "", "", false, 2900L),
+            Subscription("3", "1", "SaaS", "", "active", "", "", false, 2900L),
+            Subscription("4", "1", "SaaS", "", "cancelled", "", "", false, 2900L)
+        )
+        val churn = Analytics.churnRatePercent(subs)
+        assertEquals(25.0, churn, 0.01)
+
+        val qr = Analytics.quickRatio(subs)
+        assertNotNull(qr)
+        assertEquals(3.0, qr!!, 0.01)
+    }
+
+    @Test fun calculatesRefundRateAndMerchantHealth() {
+        val sales = listOf(
+            sale("1", 9000, status = "paid"),
+            sale("2", 1000, status = "refunded", refund = 1000)
+        )
+        val refundRate = Analytics.refundRatePercent(sales)
+        // 1000 refunded / 10000 gross = 10.0%
+        assertEquals(10.0, refundRate, 0.01)
+    }
+
+    @Test fun calculatesAovAndArpu() {
+        val sales = listOf(
+            sale("1", 3000, status = "paid"),
+            sale("2", 7000, status = "paid")
+        )
+        val aov = Analytics.averageOrderValueUsdCents(sales)
+        assertEquals(5000L, aov)
+
+        val subs = listOf(
+            Subscription("1", "1", "SaaS", "", "active", "", "", false, 2000L, billingInterval = "month"),
+            Subscription("2", "1", "SaaS", "", "active", "", "", false, 4000L, billingInterval = "month")
+        )
+        val arpu = Analytics.arpuUsdCents(subs)
+        assertEquals(3000L, arpu)
+    }
+
+    @Test fun calculatesLemonSqueezyFeesAccurately() {
+        // $100 sale = 10000 cents
+        // Standard: 5% of $100 ($5.00) + $0.50 = $5.50 (550 cents). Net = $94.50 (9450 cents)
+        val stdFee = Analytics.lemonSqueezyFees(10000L, isInternationalOrPayPal = false)
+        assertEquals(550L, stdFee.feeCents)
+        assertEquals(9450L, stdFee.netCents)
+        assertEquals(5.5, stdFee.feePercentage, 0.01)
+
+        // International (+1.5%): 6.5% of $100 ($6.50) + $0.50 = $7.00 (700 cents). Net = $93.00 (9300 cents)
+        val intFee = Analytics.lemonSqueezyFees(10000L, isInternationalOrPayPal = true)
+        assertEquals(700L, intFee.feeCents)
+        assertEquals(9300L, intFee.netCents)
+        assertEquals(7.0, intFee.feePercentage, 0.01)
+    }
+
+    @Test fun generatesValidCsvExport() {
+        val sales = listOf(
+            sale("ord_123", 4900, status = "paid").copy(product = "Licence Desktop \"Pro\"")
+        )
+        val csv = Analytics.generateCsvExport(sales)
+        assertTrue(csv.contains("Date,ID,Produit,Source,Statut,Montant Brut,Remboursement,Montant Net,Devise,Mode Test"))
+        assertTrue(csv.contains("ord_123"))
+        assertTrue(csv.contains("\"Licence Desktop \"\"Pro\"\"\""))
+        assertTrue(csv.contains("49.00"))
+    }
 }
 

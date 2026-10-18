@@ -39,6 +39,24 @@ data class Subscription(
     val billingInterval: String = "",
     val billingIntervalCount: Int = 1
 )
+
+data class LicenseKey(
+    val id: String,
+    val storeId: String,
+    val orderId: String,
+    val orderItemId: String = "",
+    val productId: String = "",
+    val productName: String = "",
+    val key: String,
+    val keyShort: String = "",
+    val status: String,
+    val activationLimit: Int,
+    val instancesCount: Int,
+    val disabled: Boolean,
+    val createdAt: String,
+    val expiresAt: String = ""
+)
+
 data class Snapshot(
     val stores: List<Store>,
     val sales: List<Sale>,
@@ -46,7 +64,8 @@ data class Snapshot(
     val fetchedAt: String,
     val eurPerUsd: Double? = null,
     val fxDate: String = "",
-    val lastFullSyncAt: String = ""
+    val lastFullSyncAt: String = "",
+    val licenseKeys: List<LicenseKey> = emptyList()
 )
 
 object SnapshotCodec {
@@ -88,6 +107,18 @@ object SnapshotCodec {
                 })
             }
         })
+        put("licenseKeys", JSONArray().apply {
+            snapshot.licenseKeys.forEach { k ->
+                put(JSONObject().apply {
+                    put("id", k.id); put("storeId", k.storeId); put("orderId", k.orderId)
+                    put("orderItemId", k.orderItemId); put("productId", k.productId)
+                    put("productName", k.productName); put("key", k.key)
+                    put("keyShort", k.keyShort); put("status", k.status)
+                    put("activationLimit", k.activationLimit); put("instancesCount", k.instancesCount)
+                    put("disabled", k.disabled); put("createdAt", k.createdAt); put("expiresAt", k.expiresAt)
+                })
+            }
+        })
     }.toString()
 
     fun decode(raw: String): Snapshot {
@@ -123,9 +154,28 @@ object SnapshotCodec {
                 billingIntervalCount = it.optInt("billingIntervalCount", 1)
             )
         }
+        val licenseKeys = root.optJSONArray("licenseKeys")?.objects()?.map {
+            LicenseKey(
+                id = it.getString("id"),
+                storeId = it.getString("storeId"),
+                orderId = it.optString("orderId"),
+                orderItemId = it.optString("orderItemId"),
+                productId = it.optString("productId"),
+                productName = it.optString("productName"),
+                key = it.getString("key"),
+                keyShort = it.optString("keyShort"),
+                status = it.getString("status"),
+                activationLimit = it.optInt("activationLimit", 0),
+                instancesCount = it.optInt("instancesCount", 0),
+                disabled = it.optBoolean("disabled", false),
+                createdAt = it.getString("createdAt"),
+                expiresAt = it.optString("expiresAt")
+            )
+        } ?: emptyList()
         return Snapshot(stores, sales, subscriptions, root.getString("fetchedAt"),
             if (root.isNull("eurPerUsd")) null else root.getDouble("eurPerUsd"),
-            root.optString("fxDate"), root.optString("lastFullSyncAt"))
+            root.optString("fxDate"), root.optString("lastFullSyncAt"),
+            licenseKeys)
     }
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }

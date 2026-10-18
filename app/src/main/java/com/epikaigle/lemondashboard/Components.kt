@@ -756,6 +756,470 @@ fun EmptyStateView(
     }
 }
 
+@Composable
+fun LicenseKeyCard(
+    license: LicenseKey,
+    onClick: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = BorderStroke(1.dp, DarkBorder)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = license.productName.ifBlank { "Licence logicielle" },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (license.expiresAt.isNotBlank()) "Expire le ${friendlyDate(license.expiresAt)}" else "Licence à vie (Perpétuelle)",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+                StatusBadge(license.status)
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Surface(
+                color = DarkSurfaceVariant,
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, DarkBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = license.keyShort.ifBlank { license.key.take(18) + "…" },
+                        fontSize = 12.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        color = Lemon,
+                        fontWeight = FontWeight.Medium
+                    )
+                    IconButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(license.key))
+                            Toast.makeText(context, "Clé copiée !", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copier", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                val limit = if (license.activationLimit == 0) "Illimitée" else "${license.activationLimit}"
+                Text(
+                    text = "Activations : ${license.instancesCount} / $limit",
+                    fontSize = 12.sp,
+                    color = TextMuted,
+                    fontWeight = FontWeight.Medium
+                )
+                if (license.instancesCount > 0) {
+                    Surface(
+                        color = MintSuccessContainer,
+                        shape = RoundedCornerShape(100.dp)
+                    ) {
+                        Text(
+                            text = "En service",
+                            fontSize = 10.sp,
+                            color = MintSuccessLight,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LicenseKeyDetailSheet(
+    license: LicenseKey,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurface,
+        scrimColor = Color.Black.copy(alpha = 0.65f),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = license.productName.ifBlank { "Licence logicielle" },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        maxLines = 2
+                    )
+                    Text(
+                        text = "Émise le ${friendlyDateTime(license.createdAt)}",
+                        fontSize = 12.sp,
+                        color = TextSecondary
+                    )
+                }
+                StatusBadge(license.status)
+            }
+
+            DashboardCard(backgroundColor = DarkSurfaceVariant) {
+                Text("CLÉ DE LICENCE COMPLÈTE", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    text = license.key,
+                    fontSize = 13.sp,
+                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    color = Lemon,
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(license.key))
+                        Toast.makeText(context, "Clé de licence copiée !", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Copier la clé de licence", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            DashboardCard(backgroundColor = DarkSurfaceVariant) {
+                Text("Détails d'activation", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+                Spacer(Modifier.height(10.dp))
+                val limit = if (license.activationLimit == 0) "Illimitée" else "${license.activationLimit} machine(s)"
+                DetailRow("Limite d'activation", limit)
+                DetailRow("Machines actives", "${license.instancesCount} active(s)", valueColor = MintSuccessLight)
+                if (license.expiresAt.isNotBlank()) {
+                    DetailRow("Date d'expiration", friendlyDate(license.expiresAt), valueColor = AmberWarningLight)
+                } else {
+                    DetailRow("Durée de validité", "Licence perpétuelle (À vie)", valueColor = MintSuccessLight)
+                }
+                if (license.orderId.isNotBlank()) {
+                    DetailRow("Commande associée", "#${license.orderId}")
+                }
+            }
+
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceContainerHigh)
+            ) {
+                Text("Fermer", color = TextPrimary)
+            }
+        }
+    }
+}
+
+@Composable
+fun MerchantHealthCard(refundRate: Double) {
+    val (statusText, statusColor, containerColor) = when {
+        refundRate < 1.0 -> Triple("Excellente (< 1%)", MintSuccessLight, MintSuccessContainer)
+        refundRate <= 2.0 -> Triple("Modérée (1-2%)", AmberWarningLight, AmberWarningContainer)
+        else -> Triple("Attention (> 2%)", CoralDangerLight, CoralDangerContainer)
+    }
+
+    DashboardCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = "SANTÉ DU COMPTE MARCHAND",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextSecondary,
+                    letterSpacing = 1.sp
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = String.format(Locale.US, "%.1f%% de remboursement", refundRate),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextPrimary
+                )
+            }
+            Surface(
+                color = containerColor,
+                shape = RoundedCornerShape(100.dp)
+            ) {
+                Text(
+                    text = statusText,
+                    color = statusColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = if (refundRate > 2.0) "Lemon Squeezy surveille les comptes avec un taux de remboursement supérieur à 2%."
+            else "Votre taux de remboursement est conforme aux standards Lemon Squeezy pour éviter les réserves de risques.",
+            fontSize = 11.sp,
+            color = TextMuted,
+            lineHeight = 15.sp
+        )
+    }
+}
+
+@Composable
+fun TopProductsCard(products: List<Analytics.ProductMetric>, currency: String, eurPerUsd: Double?) {
+    DashboardCard {
+        Text("Meilleures Ventes de Logiciels", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+        Spacer(Modifier.height(12.dp))
+        if (products.isEmpty()) {
+            Text("Aucune vente enregistrée sur cette sélection.", fontSize = 12.sp, color = TextMuted)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                products.forEachIndexed { index, p ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = DarkSurfaceVariant,
+                            shape = CircleShape,
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Lemon)
+                            }
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(p.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${p.salesCount} vente(s)", fontSize = 11.sp, color = TextSecondary)
+                        }
+                        Text(
+                            text = Analytics.money(p.netUsdCents, currency, eurPerUsd),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                    if (index < products.lastIndex) {
+                        HorizontalDivider(color = DarkBorder.copy(alpha = 0.5f), modifier = Modifier.padding(top = 8.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun UpcomingRenewalsCard(renewals: List<Analytics.UpcomingRenewal>, currency: String, eurPerUsd: Double?) {
+    DashboardCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Prochains Renouvellements (30j)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            val projectedTotal = renewals.sumOf { it.estimatedUsdCents }
+            Surface(
+                color = PurpleAccent.copy(alpha = 0.2f),
+                shape = RoundedCornerShape(100.dp)
+            ) {
+                Text(
+                    text = "+${Analytics.money(projectedTotal, currency, eurPerUsd)}",
+                    color = Color(0xFFDDD6FE),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        if (renewals.isEmpty()) {
+            Text("Aucun renouvellement programmé dans les 30 prochains jours.", fontSize = 12.sp, color = TextMuted)
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                renewals.take(5).forEach { r ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = r.subscription.product.ifBlank { "Abonnement" },
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Dans ${r.daysRemaining} jour(s) • ${friendlyDate(r.renewalDate.toString())}",
+                                fontSize = 11.sp,
+                                color = TextSecondary
+                            )
+                        }
+                        Text(
+                            text = Analytics.money(r.estimatedUsdCents, currency, eurPerUsd),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MintSuccessLight
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FeeCalculatorDialog(
+    currency: String,
+    eurPerUsd: Double?,
+    onDismiss: () -> Unit
+) {
+    var priceInput by remember { mutableStateOf("29") }
+    var isInternational by remember { mutableStateOf(false) }
+
+    val amountCents = (priceInput.toDoubleOrNull() ?: 0.0).times(100).toLong()
+    val fee = Analytics.lemonSqueezyFees(amountCents, isInternational)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurface,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Calculate, contentDescription = null, tint = Lemon, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Calculateur de Marge Lemon Squeezy", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    "Simulez vos gains réels après prélèvement des frais Lemon Squeezy (5% + 0,50$ + 1,5% si international/PayPal).",
+                    fontSize = 12.sp,
+                    color = TextSecondary,
+                    lineHeight = 17.sp
+                )
+
+                OutlinedTextField(
+                    value = priceInput,
+                    onValueChange = { priceInput = it.filter { c -> c.isDigit() || c == '.' } },
+                    label = { Text("Prix de vente du logiciel ($currency)", color = TextMuted) },
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Lemon,
+                        unfocusedBorderColor = DarkBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = Lemon
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Paiement International ou PayPal (+1,5%)", fontSize = 12.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Switch(
+                        checked = isInternational,
+                        onCheckedChange = { isInternational = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = Lemon)
+                    )
+                }
+
+                Surface(
+                    color = DarkSurfaceVariant,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, DarkBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        DetailRow("Prix brut", Analytics.money(fee.grossCents, currency, eurPerUsd))
+                        DetailRow(
+                            "Frais Lemon Squeezy (${String.format(Locale.US, "%.1f", fee.feePercentage)}%)",
+                            "- ${Analytics.money(fee.feeCents, currency, eurPerUsd)}",
+                            valueColor = CoralDangerLight
+                        )
+                        HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 4.dp))
+                        DetailRow(
+                            "Bénéfice net dans votre poche",
+                            Analytics.money(fee.netCents, currency, eurPerUsd),
+                            isBold = true,
+                            valueColor = MintSuccessLight
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(10.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+            ) {
+                Text("Fermer", fontWeight = FontWeight.Bold)
+            }
+        }
+    )
+}
+
 fun friendlyDate(iso: String): String {
     val day = Analytics.dateOf(iso) ?: return "indisponible"
     return day.format(DateTimeFormatter.ofPattern("dd MMM yyyy", Locale.FRANCE))

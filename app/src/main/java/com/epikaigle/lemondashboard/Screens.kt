@@ -6,6 +6,8 @@ import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -240,11 +242,14 @@ fun OverviewScreen(
     val m = remember(sales, subs, s.period) { Analytics.metrics(sales, subs, s.period, now) }
     val history = remember(sales, s.period) { Analytics.graphBuckets(sales, s.period, now) }
     val prevNet = remember(sales, s.period) { Analytics.previousPeriodNet(sales, s.period, now) }
-    val topProducts = remember(sales, s.period) {
-        sales.filter { it.paid && Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, now) }
-            .groupBy { it.product }
-            .mapValues { (_, transactions) -> transactions.sumOf { it.netUsd } }
-            .toList().sortedByDescending { it.second }.take(4)
+    val refundRate = remember(sales) { Analytics.refundRatePercent(sales) }
+    val aov = remember(sales) { Analytics.averageOrderValueUsdCents(sales) }
+    val mrr = remember(subs) { Analytics.mrrEstimateUsdCents(subs) }
+    val activeSubsCount = remember(subs) { subs.count { it.status in setOf("active", "on_trial") } }
+    val arpu = remember(mrr, activeSubsCount) { Analytics.arpuUsdCents(mrr, activeSubsCount) }
+    val productLeaderboard = remember(sales, s.period) {
+        val inPeriodSales = sales.filter { Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, now) }
+        Analytics.topProducts(inPeriodSales, 5)
     }
     val undated = remember(sales) { Analytics.undatedRefundUsdCents(sales) }
     var selectedSaleForDetail by remember { mutableStateOf<Sale?>(null) }
@@ -322,7 +327,7 @@ fun OverviewScreen(
             }
         }
 
-        // KPI 2x2 Grid
+        // KPI 3-Row Grid
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 StatCard(
@@ -363,6 +368,31 @@ fun OverviewScreen(
             }
         }
 
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatCard(
+                    title = "Panier moyen (AOV)",
+                    value = Analytics.money(aov, s.currency, snapshot.eurPerUsd),
+                    icon = Icons.Default.ShoppingCart,
+                    iconTint = MintSuccessLight,
+                    subtitle = "Net moyen / vente",
+                    modifier = Modifier.weight(1f)
+                )
+                StatCard(
+                    title = "Revenu / Abo (ARPU)",
+                    value = Analytics.money(arpu, s.currency, snapshot.eurPerUsd),
+                    icon = Icons.Default.AccountCircle,
+                    iconTint = Lemon,
+                    subtitle = "Moyenne mensuelle",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        item {
+            MerchantHealthCard(refundRate)
+        }
+
         if (undated > 0L) {
             item {
                 ExplanationBanner(
@@ -385,57 +415,10 @@ fun OverviewScreen(
             )
         }
 
-        // Top Products Leaderboard
-        if (topProducts.isNotEmpty()) {
+        // Top Software Products Leaderboard
+        if (productLeaderboard.isNotEmpty()) {
             item {
-                Column {
-                    SectionHeader(title = "Meilleurs produits", subtitle = "Classés par revenu net sur la période")
-                    Spacer(Modifier.height(12.dp))
-                    topProducts.forEachIndexed { i, (product, net) ->
-                        val medalColor = when (i) {
-                            0 -> Lemon
-                            1 -> Color(0xFFE2E8F0)
-                            2 -> Color(0xFFF59E0B)
-                            else -> TextMuted
-                        }
-                        DashboardCard(
-                            modifier = Modifier.padding(bottom = 8.dp),
-                            shape = RoundedCornerShape(14.dp)
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(medalColor.copy(alpha = 0.16f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "${i + 1}",
-                                        color = medalColor,
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 12.sp
-                                    )
-                                }
-                                Spacer(Modifier.width(12.dp))
-                                Text(
-                                    text = product,
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    fontWeight = FontWeight.Medium,
-                                    color = TextPrimary
-                                )
-                                Spacer(Modifier.width(10.dp))
-                                Text(
-                                    text = Analytics.money(net, s.currency, snapshot.eurPerUsd),
-                                    fontWeight = FontWeight.Bold,
-                                    color = TextPrimary
-                                )
-                            }
-                        }
-                    }
-                }
+                TopProductsCard(productLeaderboard, s.currency, snapshot.eurPerUsd)
             }
         }
 
@@ -772,23 +755,51 @@ fun SubscriptionsScreen(
     vm: DashboardViewModel
 ) {
     val focusManager = LocalFocusManager.current
-    var query by remember { mutableStateOf("") }
-    var filter by remember { mutableIntStateOf(0) }
+    var activeSubTab by remember { mutableIntStateOf(0) }
+    var subQuery by remember { mutableStateOf("") }
+    var subFilter by remember { mutableIntStateOf(0) }
     var selectedSubForDetail by remember { mutableStateOf<Subscription?>(null) }
+
+    var licQuery by remember { mutableStateOf("") }
+    var licFilter by remember { mutableIntStateOf(0) }
+    var selectedLicForDetail by remember { mutableStateOf<LicenseKey?>(null) }
+
+    val licenseKeys = remember(snapshot.licenseKeys, s.selectedStore) {
+        Analytics.selectedLicenseKeys(snapshot, s.selectedStore)
+    }
 
     val counts = remember(subscriptions) { subscriptions.groupingBy { it.status }.eachCount() }
     val mrr = remember(subscriptions) { Analytics.mrrEstimateUsdCents(subscriptions) }
     val arr = remember(subscriptions) { Analytics.arrEstimateUsdCents(subscriptions) }
+    val churnRate = remember(subscriptions) { Analytics.churnRatePercent(subscriptions) }
+    val quickRatio = remember(subscriptions) { Analytics.quickRatio(subscriptions) }
+    val intervals = remember(subscriptions) { Analytics.billingIntervalBreakdown(subscriptions) }
+    val renewals = remember(subscriptions) { Analytics.upcomingRenewals(subscriptions, 30) }
 
-    val rows = remember(subscriptions, query, filter) {
+    val filteredSubs = remember(subscriptions, subQuery, subFilter) {
         subscriptions.filter { sub ->
-            (query.isBlank() || sub.product.contains(query.trim(), ignoreCase = true) ||
-                sub.variant.contains(query.trim(), ignoreCase = true) ||
-                sub.id.contains(query.trim(), ignoreCase = true)) &&
-                when (filter) {
+            (subQuery.isBlank() || sub.product.contains(subQuery.trim(), ignoreCase = true) ||
+                sub.variant.contains(subQuery.trim(), ignoreCase = true) ||
+                sub.id.contains(subQuery.trim(), ignoreCase = true)) &&
+                when (subFilter) {
                     1 -> sub.status == "active"
                     2 -> sub.status == "on_trial"
                     3 -> sub.status !in setOf("active", "on_trial")
+                    else -> true
+                }
+        }
+    }
+
+    val filteredLicenses = remember(licenseKeys, licQuery, licFilter) {
+        licenseKeys.filter { lic ->
+            (licQuery.isBlank() || lic.productName.contains(licQuery.trim(), ignoreCase = true) ||
+                lic.key.contains(licQuery.trim(), ignoreCase = true) ||
+                lic.keyShort.contains(licQuery.trim(), ignoreCase = true) ||
+                lic.orderId.contains(licQuery.trim(), ignoreCase = true)) &&
+                when (licFilter) {
+                    1 -> lic.status == "active" && !lic.disabled
+                    2 -> lic.status == "expired"
+                    3 -> lic.status == "disabled" || lic.disabled
                     else -> true
                 }
         }
@@ -799,196 +810,409 @@ fun SubscriptionsScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Abonnements", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+            Text("SaaS & Licences", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
             Spacer(Modifier.height(4.dp))
-            Text("Suivi de vos revenus récurrents (MRR), renouvellements et statuts.", color = TextSecondary, fontSize = 13.sp)
+            Text("Revenus récurrents (MRR), renouvellements, churn et gestion des clés de licence.", color = TextSecondary, fontSize = 13.sp)
         }
 
         item { StoreChips(snapshot, s.selectedStore, vm::store) }
 
-        // SaaS MRR & ARR Hero Card
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(22.dp),
-                colors = CardDefaults.cardColors(containerColor = DarkSurface),
-                border = BorderStroke(1.dp, DarkBorder)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Brush.linearGradient(listOf(PurpleAccentContainer, Color(0xFF1E1738), DarkSurface)))
-                        .padding(20.dp)
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = "REVENU RÉCURRENT MENSUEL (MRR)",
-                                color = Color(0xFFC4B5FD),
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
-                            )
-                            Surface(
-                                color = PurpleAccent.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(100.dp)
-                            ) {
-                                Text(
-                                    "ARR : ${Analytics.money(arr, s.currency, snapshot.eurPerUsd)}",
-                                    color = Color(0xFFDDD6FE),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-
-                        Text(
-                            text = Analytics.money(mrr, s.currency, snapshot.eurPerUsd),
-                            fontSize = 32.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimary
-                        )
-
-                        Spacer(Modifier.height(4.dp))
-
-                        Text(
-                            text = "Estimé sur la base des ${counts["active"] ?: 0} abonnement(s) actif(s)",
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-            }
-        }
-
-        // Subscriptions Count Row
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatCard(
-                    title = "Actifs",
-                    value = (counts["active"] ?: 0).toString(),
-                    icon = Icons.Default.CheckCircle,
-                    iconTint = MintSuccessLight,
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    title = "En essai",
-                    value = (counts["on_trial"] ?: 0).toString(),
-                    icon = Icons.Default.HourglassTop,
-                    iconTint = AmberWarningLight,
-                    modifier = Modifier.weight(1f)
-                )
-                StatCard(
-                    title = "Résiliés",
-                    value = (subscriptions.size - (counts["active"] ?: 0) - (counts["on_trial"] ?: 0)).toString(),
-                    icon = Icons.Default.Cancel,
-                    iconTint = CoralDangerLight,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Search Bar
-        item {
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text("Rechercher un abonnement...", color = TextMuted) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary)
-                        }
-                    }
-                },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Lemon,
-                    unfocusedBorderColor = DarkBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary,
-                    cursorColor = Lemon,
-                    focusedContainerColor = DarkSurface,
-                    unfocusedContainerColor = DarkSurface
-                )
-            )
-        }
-
-        // Filter Chips
+        // Sub-Tab Switcher: Abonnements vs Licences
         item {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(DarkSurfaceVariant)
+                    .padding(4.dp)
             ) {
-                listOf(
-                    "Tous (${subscriptions.size})",
-                    "Actifs (${counts["active"] ?: 0})",
-                    "Essais (${counts["on_trial"] ?: 0})",
-                    "Autres"
-                ).forEachIndexed { i, label ->
-                    FilterChip(
-                        selected = filter == i,
-                        onClick = { filter = i },
-                        label = { Text(label, fontWeight = if (filter == i) FontWeight.Bold else FontWeight.Normal) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Lemon,
-                            selectedLabelColor = DarkBackground,
-                            containerColor = DarkSurfaceVariant,
-                            labelColor = TextSecondary
-                        ),
-                        border = FilterChipDefaults.filterChipBorder(
-                            borderColor = DarkBorder,
-                            selectedBorderColor = Lemon,
-                            enabled = true,
-                            selected = filter == i
-                        )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (activeSubTab == 0) Lemon else Color.Transparent)
+                        .clickable { activeSubTab = 0 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Abonnements (${subscriptions.size})",
+                        color = if (activeSubTab == 0) DarkBackground else TextSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (activeSubTab == 1) Lemon else Color.Transparent)
+                        .clickable { activeSubTab = 1 }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Clés de Licence (${licenseKeys.size})",
+                        color = if (activeSubTab == 1) DarkBackground else TextSecondary,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
                     )
                 }
             }
         }
 
-        item {
-            Text("${rows.size} abonnement(s) affiché(s)", color = TextSecondary, fontSize = 12.sp)
-        }
-
-        if (rows.isEmpty()) {
+        if (activeSubTab == 0) {
+            // SaaS MRR & ARR Hero Card
             item {
-                EmptyStateView(
-                    icon = Icons.Default.Autorenew,
-                    title = if (subscriptions.isEmpty()) "Aucun abonnement enregistré" else "Aucun abonnement correspondant",
-                    message = if (subscriptions.isEmpty()) "Les abonnements apparaîtront automatiquement dès qu'un client souscrit."
-                    else "Modifiez la recherche ou les filtres.",
-                    actionText = if (query.isNotBlank() || filter != 0) "Effacer les filtres" else null,
-                    onAction = { query = ""; filter = 0 }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(22.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurface),
+                    border = BorderStroke(1.dp, DarkBorder)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Brush.linearGradient(listOf(PurpleAccentContainer, Color(0xFF1E1738), DarkSurface)))
+                            .padding(20.dp)
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "REVENU RÉCURRENT MENSUEL (MRR)",
+                                    color = Color(0xFFC4B5FD),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp
+                                )
+                                Surface(
+                                    color = PurpleAccent.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(100.dp)
+                                ) {
+                                    Text(
+                                        "ARR : ${Analytics.money(arr, s.currency, snapshot.eurPerUsd)}",
+                                        color = Color(0xFFDDD6FE),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+
+                            Text(
+                                text = Analytics.money(mrr, s.currency, snapshot.eurPerUsd),
+                                fontSize = 32.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = TextPrimary
+                            )
+
+                            Spacer(Modifier.height(4.dp))
+
+                            Text(
+                                text = "Estimé sur la base des ${counts["active"] ?: 0} abonnement(s) actif(s)",
+                                color = TextSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
+            }
+
+            // SaaS Health Indicators: Churn Rate & Quick Ratio
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatCard(
+                        title = "Taux de Churn",
+                        value = String.format(Locale.US, "%.1f%%", churnRate),
+                        icon = Icons.Default.TrendingDown,
+                        iconTint = if (churnRate > 5.0) CoralDangerLight else MintSuccessLight,
+                        subtitle = "Attrition abonnés",
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        title = "Quick Ratio",
+                        value = String.format(Locale.US, "%.1f", quickRatio),
+                        icon = Icons.Default.Speed,
+                        iconTint = if (quickRatio >= 4.0) MintSuccessLight else if (quickRatio >= 1.0) AmberWarningLight else CoralDangerLight,
+                        subtitle = if (quickRatio >= 4.0) "Excellente rétention" else "Expansion/Départs",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Billing Interval Breakdown Pill
+            item {
+                Surface(
+                    color = DarkSurfaceVariant,
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, DarkBorder),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Formules récurrentes", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = "${intervals["Mensuel"] ?: 0} mensuel(s) • ${intervals["Annuel"] ?: 0} annuel(s)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Lemon
+                        )
+                    }
+                }
+            }
+
+            // Upcoming Renewals Calendar
+            if (renewals.isNotEmpty()) {
+                item {
+                    UpcomingRenewalsCard(renewals, s.currency, snapshot.eurPerUsd)
+                }
+            }
+
+            // Subscriptions Count Row
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatCard(
+                        title = "Actifs",
+                        value = (counts["active"] ?: 0).toString(),
+                        icon = Icons.Default.CheckCircle,
+                        iconTint = MintSuccessLight,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        title = "En essai",
+                        value = (counts["on_trial"] ?: 0).toString(),
+                        icon = Icons.Default.HourglassTop,
+                        iconTint = AmberWarningLight,
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        title = "Résiliés",
+                        value = (subscriptions.size - (counts["active"] ?: 0) - (counts["on_trial"] ?: 0)).toString(),
+                        icon = Icons.Default.Cancel,
+                        iconTint = CoralDangerLight,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Subscriptions Search Bar
+            item {
+                OutlinedTextField(
+                    value = subQuery,
+                    onValueChange = { subQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("Rechercher un abonnement...", color = TextMuted) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                    trailingIcon = {
+                        if (subQuery.isNotEmpty()) {
+                            IconButton(onClick = { subQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary)
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Lemon,
+                        unfocusedBorderColor = DarkBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = Lemon,
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface
+                    )
                 )
+            }
+
+            // Filter Chips
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "Tous (${subscriptions.size})",
+                        "Actifs (${counts["active"] ?: 0})",
+                        "Essais (${counts["on_trial"] ?: 0})",
+                        "Autres"
+                    ).forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = subFilter == i,
+                            onClick = { subFilter = i },
+                            label = { Text(label, fontWeight = if (subFilter == i) FontWeight.Bold else FontWeight.Normal) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Lemon,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceVariant,
+                                labelColor = TextSecondary
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = DarkBorder,
+                                selectedBorderColor = Lemon,
+                                enabled = true,
+                                selected = subFilter == i
+                            )
+                        )
+                    }
+                }
+            }
+
+            item {
+                Text("${filteredSubs.size} abonnement(s) affiché(s)", color = TextSecondary, fontSize = 12.sp)
+            }
+
+            if (filteredSubs.isEmpty()) {
+                item {
+                    EmptyStateView(
+                        icon = Icons.Default.Autorenew,
+                        title = if (subscriptions.isEmpty()) "Aucun abonnement enregistré" else "Aucun abonnement correspondant",
+                        message = if (subscriptions.isEmpty()) "Les abonnements apparaîtront automatiquement dès qu'un client souscrit."
+                        else "Modifiez la recherche ou les filtres.",
+                        actionText = if (subQuery.isNotBlank() || subFilter != 0) "Effacer les filtres" else null,
+                        onAction = { subQuery = ""; subFilter = 0 }
+                    )
+                }
+            } else {
+                items(filteredSubs, key = { it.id }) { sub ->
+                    SubscriptionItemCard(
+                        sub = sub,
+                        snapshot = snapshot,
+                        currency = s.currency,
+                        onClick = { selectedSubForDetail = sub }
+                    )
+                }
             }
         } else {
-            items(rows, key = { it.id }) { sub ->
-                SubscriptionItemCard(
-                    sub = sub,
-                    snapshot = snapshot,
-                    currency = s.currency,
-                    onClick = { selectedSubForDetail = sub }
+            // TAB 1: LICENCES LOGICIELLES
+            val activeLicCount = licenseKeys.count { it.status == "active" && !it.disabled }
+            val expiredLicCount = licenseKeys.count { it.status == "expired" }
+            val disabledLicCount = licenseKeys.count { it.status == "disabled" || it.disabled }
+            val activeInstancesCount = licenseKeys.sumOf { it.instancesCount }
+
+            // KPI row for licenses
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    StatCard(
+                        title = "Licences actives",
+                        value = activeLicCount.toString(),
+                        icon = Icons.Default.VpnKey,
+                        iconTint = MintSuccessLight,
+                        subtitle = "Sur ${licenseKeys.size} au total",
+                        modifier = Modifier.weight(1f)
+                    )
+                    StatCard(
+                        title = "Postes activés",
+                        value = activeInstancesCount.toString(),
+                        icon = Icons.Default.Devices,
+                        iconTint = Lemon,
+                        subtitle = "Machines en service",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            // Search Bar for License Keys
+            item {
+                OutlinedTextField(
+                    value = licQuery,
+                    onValueChange = { licQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("Rechercher une clé, produit ou commande...", color = TextMuted) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                    trailingIcon = {
+                        if (licQuery.isNotEmpty()) {
+                            IconButton(onClick = { licQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary)
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Lemon,
+                        unfocusedBorderColor = DarkBorder,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary,
+                        cursorColor = Lemon,
+                        focusedContainerColor = DarkSurface,
+                        unfocusedContainerColor = DarkSurface
+                    )
                 )
             }
-        }
 
-        item {
-            ExplanationBanner("Le tarif affiché est un prix catalogue. La dernière facture payée ne prédit pas le prochain débit : remises, taxes et prorata peuvent changer.")
+            // License Status Filter Chips
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "Toutes (${licenseKeys.size})",
+                        "Actives ($activeLicCount)",
+                        "Expirées ($expiredLicCount)",
+                        "Désactivées ($disabledLicCount)"
+                    ).forEachIndexed { i, label ->
+                        FilterChip(
+                            selected = licFilter == i,
+                            onClick = { licFilter = i },
+                            label = { Text(label, fontWeight = if (licFilter == i) FontWeight.Bold else FontWeight.Normal) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Lemon,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceVariant,
+                                labelColor = TextSecondary
+                            ),
+                            border = FilterChipDefaults.filterChipBorder(
+                                borderColor = DarkBorder,
+                                selectedBorderColor = Lemon,
+                                enabled = true,
+                                selected = licFilter == i
+                            )
+                        )
+                    }
+                }
+            }
+
+            item {
+                Text("${filteredLicenses.size} licence(s) affichée(s)", color = TextSecondary, fontSize = 12.sp)
+            }
+
+            if (filteredLicenses.isEmpty()) {
+                item {
+                    EmptyStateView(
+                        icon = Icons.Default.VpnKey,
+                        title = if (licenseKeys.isEmpty()) "Aucune licence logicielle générée" else "Aucune licence correspondante",
+                        message = if (licenseKeys.isEmpty()) "Les clés de licence apparaîtront automatiquement lors de la vente de logiciels ou produits configurés avec le module licensing Lemon Squeezy."
+                        else "Modifiez les filtres ou le texte recherché.",
+                        actionText = if (licQuery.isNotBlank() || licFilter != 0) "Effacer les filtres" else null,
+                        onAction = { licQuery = ""; licFilter = 0 }
+                    )
+                }
+            } else {
+                items(filteredLicenses, key = { it.id }) { lic ->
+                    LicenseKeyCard(
+                        license = lic,
+                        onClick = { selectedLicForDetail = lic }
+                    )
+                }
+            }
         }
     }
 
@@ -998,6 +1222,13 @@ fun SubscriptionsScreen(
             snapshot = snapshot,
             currency = s.currency,
             onDismiss = { selectedSubForDetail = null }
+        )
+    }
+
+    selectedLicForDetail?.let { lic ->
+        LicenseKeyDetailSheet(
+            license = lic,
+            onDismiss = { selectedLicForDetail = null }
         )
     }
 }
@@ -1293,6 +1524,7 @@ fun TimelineStep(step: Int, title: String, description: String, isDone: Boolean)
 fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
     val context = LocalContext.current
     var confirm by remember { mutableStateOf(false) }
+    var showFeeCalculator by remember { mutableStateOf(false) }
     val uri = LocalUriHandler.current
 
     Column(
@@ -1452,6 +1684,65 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
             }
         }
 
+        // SaaS Tools & Accounting Export
+        DashboardCard {
+            Text("Outils Vendeur SaaS & Comptabilité", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Simulateur de commissions Lemon Squeezy MoR et export complet de vos transactions au format CSV standard pour votre comptabilité.",
+                fontSize = 12.sp,
+                color = TextSecondary,
+                lineHeight = 17.sp
+            )
+            Spacer(Modifier.height(14.dp))
+
+            OutlinedButton(
+                onClick = { showFeeCalculator = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Default.Calculate, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Simulateur de Frais & Marge MoR", color = Lemon, fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            Button(
+                onClick = {
+                    try {
+                        val csvData = Analytics.generateCsvExport(snapshot.sales, s.currency, snapshot.eurPerUsd)
+                        val cacheFile = File(context.cacheDir, "lemon_transactions_${LocalDate.now()}.csv")
+                        cacheFile.writeText(csvData, Charsets.UTF_8)
+
+                        val contentUri = FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            cacheFile
+                        )
+
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/csv"
+                            putExtra(Intent.EXTRA_STREAM, contentUri)
+                            putExtra(Intent.EXTRA_SUBJECT, "Export transactions Lemon Squeezy (${LocalDate.now()})")
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "Exporter le fichier CSV"))
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Erreur lors de l'export CSV : ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+            ) {
+                Icon(Icons.Default.FileDownload, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Exporter les transactions en CSV", fontWeight = FontWeight.Bold)
+            }
+        }
+
         // Security & Danger Zone
         DashboardCard {
             Text("Sécurité & Données locales", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
@@ -1481,6 +1772,14 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
         }
 
         ExplanationBanner("Application personnelle et indépendante, non affiliée à Lemon Squeezy. Fonctionnement en lecture seule : aucune modification de commande ou d'abonnement n'est possible.")
+    }
+
+    if (showFeeCalculator) {
+        FeeCalculatorDialog(
+            currency = s.currency,
+            eurPerUsd = snapshot.eurPerUsd,
+            onDismiss = { showFeeCalculator = false }
+        )
     }
 
     if (confirm) {

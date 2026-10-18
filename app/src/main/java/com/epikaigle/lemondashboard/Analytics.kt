@@ -36,6 +36,9 @@ object Analytics {
     fun selectedSubscriptions(snapshot: Snapshot, storeId: String, includeTest: Boolean): List<Subscription> =
         snapshot.subscriptions.filter { (storeId.isEmpty() || it.storeId == storeId) && (includeTest || !it.testMode) }
 
+    fun selectedLicenseKeys(snapshot: Snapshot, storeId: String): List<LicenseKey> =
+        snapshot.licenseKeys.filter { storeId.isEmpty() || it.storeId == storeId }
+
     fun inPeriod(date: LocalDate?, period: Period, today: LocalDate = LocalDate.now()): Boolean {
         if (date == null || date.isAfter(today)) return false
         return when (period) {
@@ -228,5 +231,135 @@ object Analytics {
 
     fun arrEstimateUsdCents(subscriptions: List<Subscription>): Long =
         mrrEstimateUsdCents(subscriptions) * 12L
+
+    data class ProductMetric(
+        val name: String,
+        val salesCount: Int,
+        val netUsdCents: Long,
+        val grossUsdCents: Long
+    )
+
+    fun topProducts(sales: List<Sale>, limit: Int = 5): List<ProductMetric> {
+        return sales.filter { it.paid }
+            .groupBy { it.product.ifBlank { "Logiciel / Produit" } }
+            .map { (name, items) ->
+                ProductMetric(
+                    name = name,
+                    salesCount = items.size,
+                    netUsdCents = items.sumOf { it.netUsd },
+                    grossUsdCents = items.sumOf { it.usdCents }
+                )
+            }
+            .sortedByDescending { it.netUsdCents }
+            .take(limit)
+    }
+
+    fun churnRatePercent(subscriptions: List<Subscription>): Double {
+        val active = subscriptions.count { it.status in setOf("active", "on_trial") }
+        val cancelled = subscriptions.count { it.status in setOf("cancelled", "expired") }
+        val total = active + cancelled
+        return if (total == 0) 0.0 else (cancelled.toDouble() / total.toDouble()) * 100.0
+    }
+
+    fun quickRatio(subscriptions: List<Subscription>): Double {
+        val active = subscriptions.count { it.status in setOf("active", "on_trial") }
+        val cancelled = subscriptions.count { it.status in setOf("cancelled", "expired") }
+        return if (cancelled == 0) (if (active > 0) active.toDouble() else 1.0) else (active.toDouble() / cancelled.toDouble())
+    }
+
+    fun refundRatePercent(sales: List<Sale>): Double {
+        val paid = sales.filter { it.paid }
+        if (paid.isEmpty()) return 0.0
+        val gross = paid.sumOf { it.usdCents }
+        val refund = paid.sumOf { it.usdRefundCents }
+        return if (gross <= 0L) 0.0 else (refund.toDouble() / gross.toDouble()) * 100.0
+    }
+
+    fun averageOrderValueUsdCents(sales: List<Sale>): Long {
+        val paid = sales.filter { it.paid }
+        return if (paid.isEmpty()) 0L else paid.sumOf { it.netUsd } / paid.size
+    }
+
+    fun arpuUsdCents(mrrUsdCents: Long, activeSubsCount: Int): Long {
+        return if (activeSubsCount <= 0) 0L else mrrUsdCents / activeSubsCount
+    }
+
+    fun arpuUsdCents(subscriptions: List<Subscription>): Long {
+        val active = subscriptions.count { it.status in setOf("active", "on_trial") }
+        return arpuUsdCents(mrrEstimateUsdCents(subscriptions), active)
+    }
+
+    fun billingIntervalBreakdown(subscriptions: List<Subscription>): Map<String, Int> {
+        val active = subscriptions.filter { it.status in setOf("active", "on_trial") }
+        val counts = mutableMapOf("Mensuel" to 0, "Annuel" to 0, "Autre" to 0)
+        for (sub in active) {
+            when (sub.billingInterval) {
+                "month" -> counts["Mensuel"] = (counts["Mensuel"] ?: 0) + 1
+                "year" -> counts["Annuel"] = (counts["Annuel"] ?: 0) + 1
+                else -> counts["Autre"] = (counts["Autre"] ?: 0) + 1
+            }
+        }
+        return counts
+    }
+
+    data class UpcomingRenewal(
+        val subscription: Subscription,
+        val renewalDate: LocalDate,
+        val daysRemaining: Long,
+        val estimatedUsdCents: Long
+    )
+
+    fun upcomingRenewals(
+        subscriptions: List<Subscription>,
+        daysAhead: Long = 30,
+        today: LocalDate = LocalDate.now()
+    ): List<UpcomingRenewal> {
+        val limit = today.plusDays(daysAhead)
+        return subscriptions.filter { it.status == "active" && it.renewsAt.isNotBlank() }
+            .mapNotNull { sub ->
+                val date = dateOf(sub.renewsAt) ?: return@mapNotNull null
+                if (date.isBefore(today) || date.isAfter(limit)) return@mapNotNull null
+                val days = java.time.temporal.ChronoUnit.DAYS.between(today, date).coerceAtLeast(0)
+                val amount = sub.catalogPriceCents ?: sub.lastInvoiceUsdCents ?: 0L
+                UpcomingRenewal(sub, date, days, amount)
+            }
+            .sortedBy { it.daysRemaining }
+    }
+
+    data class FeeBreakdown(
+        val grossCents: Long,
+        val feeCents: Long,
+        val netCents: Long,
+        val feePercentage: Double
+    )
+
+    fun lemonSqueezyFees(amountCents: Long, isInternationalOrPayPal: Boolean = false): FeeBreakdown {
+        if (amountCents <= 0L) return FeeBreakdown(0L, 0L, 0L, 0.0)
+        val ratePercent = if (isInternationalOrPayPal) 6.5 else 5.0
+        val percentageFee = (amountCents.toDouble() * ratePercent / 100.0).toLong()
+        val fixedFee = 50L
+        val totalFee = (percentageFee + fixedFee).coerceAtMost(amountCents)
+        val net = (amountCents - totalFee).coerceAtLeast(0L)
+        val effectivePercent = (totalFee.toDouble() / amountCents.toDouble()) * 100.0
+        return FeeBreakdown(amountCents, totalFee, net, effectivePercent)
+    }
+
+    fun generateCsvExport(sales: List<Sale>, currency: String = "USD", eurPerUsd: Double? = null): String {
+        val sb = StringBuilder()
+        sb.append("Date,ID,Produit,Source,Statut,Montant Brut,Remboursement,Montant Net,Devise,Mode Test\n")
+        sales.forEach { s ->
+            val date = s.createdAt.take(19).replace('T', ' ')
+            val productEscaped = "\"" + s.product.replace("\"", "\"\"") + "\""
+            val source = s.source
+            val status = s.status
+            val gross = String.format(java.util.Locale.US, "%.2f", s.usdCents / 100.0)
+            val refund = String.format(java.util.Locale.US, "%.2f", s.usdRefundCents / 100.0)
+            val net = String.format(java.util.Locale.US, "%.2f", s.netUsd / 100.0)
+            val curr = s.currency
+            val test = if (s.testMode) "OUI" else "NON"
+            sb.append("$date,${s.id},$productEscaped,$source,$status,$gross,$refund,$net,$curr,$test\n")
+        }
+        return sb.toString()
+    }
 }
 

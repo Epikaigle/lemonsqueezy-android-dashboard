@@ -89,7 +89,7 @@ private fun LemonApp(vm: DashboardViewModel) {
                     val tabs = listOf(
                         NavigationItem("Accueil", Icons.Filled.Dashboard, Icons.Outlined.Dashboard, 0),
                         NavigationItem("Ventes", Icons.AutoMirrored.Filled.ReceiptLong, Icons.AutoMirrored.Outlined.ReceiptLong, 1),
-                        NavigationItem("Abos", Icons.Filled.Autorenew, Icons.Outlined.Autorenew, 2),
+                        NavigationItem("SaaS & Clés", Icons.Filled.Key, Icons.Outlined.Key, 2),
                         NavigationItem("Versements", Icons.Filled.AccountBalanceWallet, Icons.Outlined.AccountBalanceWallet, 3),
                         NavigationItem("Réglages", Icons.Filled.Settings, Icons.Outlined.Settings, 4)
                     )

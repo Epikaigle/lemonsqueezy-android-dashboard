@@ -191,6 +191,34 @@ class LemonApi {
 
         val fetchedSales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
         val sales = if (full) fetchedSales else fetchedSales + previous!!.sales
+
+        progress("Récupération des licences logicielles…")
+        val licenseKeys = try {
+            val rawLicenses = all("license-keys", token)
+            rawLicenses.map { raw ->
+                val a = attr(raw)
+                LicenseKey(
+                    id = raw.getString("id"),
+                    storeId = a.idValue("store_id"),
+                    orderId = a.idValue("order_id"),
+                    orderItemId = a.idValue("order_item_id"),
+                    productId = a.idValue("product_id"),
+                    productName = a.str("product_name"),
+                    key = a.str("key"),
+                    keyShort = a.str("key_short"),
+                    status = a.str("status"),
+                    activationLimit = a.optInt("activation_limit", 0),
+                    instancesCount = a.optInt("instances_count", 0),
+                    disabled = a.optBoolean("disabled", false),
+                    createdAt = a.str("created_at"),
+                    expiresAt = a.str("expires_at")
+                )
+            }.sortedByDescending { it.createdAt }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException) throw e
+            previous?.licenseKeys ?: emptyList()
+        }
+
         progress("Finalisation de la synchronisation…")
         val fx = fxDeferred.await()
 
@@ -201,7 +229,8 @@ class LemonApi {
             fetchedAt = Instant.now().toString(),
             eurPerUsd = fx.first,
             fxDate = fx.second,
-            lastFullSyncAt = if (full) now.toString() else previous!!.lastFullSyncAt
+            lastFullSyncAt = if (full) now.toString() else previous!!.lastFullSyncAt,
+            licenseKeys = licenseKeys
         )
     }
 }
