@@ -173,4 +173,60 @@ object Analytics {
     } catch (_: Exception) {
         "${BigDecimal.valueOf(cents, 2)} ${currency.uppercase(Locale.ROOT)}"
     }
+
+    data class PayoutEstimates(
+        val readyUsdCents: Long,
+        val holdingUsdCents: Long,
+        val nextPayoutDate: LocalDate,
+        val daysUntilNextPayout: Long
+    )
+
+    fun payoutEstimates(sales: List<Sale>, today: LocalDate = LocalDate.now()): PayoutEstimates {
+        val nextDate = when {
+            today.dayOfMonth <= 14 -> today.withDayOfMonth(14)
+            today.dayOfMonth <= 28 -> today.withDayOfMonth(28)
+            else -> today.plusMonths(1).withDayOfMonth(14)
+        }
+        val daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, nextDate).coerceAtLeast(0)
+        val cutoff = today.minusDays(13)
+
+        var ready = 0L
+        var holding = 0L
+        for (sale in sales) {
+            if (!sale.paid) continue
+            val date = dateOf(sale.createdAt) ?: continue
+            val net = sale.netUsd
+            if (date.isAfter(cutoff)) {
+                holding += net
+            } else {
+                ready += net
+            }
+        }
+        return PayoutEstimates(
+            readyUsdCents = ready,
+            holdingUsdCents = holding,
+            nextPayoutDate = nextDate,
+            daysUntilNextPayout = daysUntil
+        )
+    }
+
+    fun mrrEstimateUsdCents(subscriptions: List<Subscription>): Long {
+        return subscriptions.asSequence()
+            .filter { it.status in setOf("active", "on_trial") }
+            .map { sub ->
+                val amount = sub.catalogPriceCents ?: sub.lastInvoiceUsdCents ?: 0L
+                when (sub.billingInterval) {
+                    "year" -> amount / 12L
+                    "month" -> amount / sub.billingIntervalCount.coerceAtLeast(1)
+                    "week" -> (amount * 52L) / 12L
+                    "day" -> amount * 30L
+                    else -> amount
+                }
+            }
+            .sum()
+    }
+
+    fun arrEstimateUsdCents(subscriptions: List<Subscription>): Long =
+        mrrEstimateUsdCents(subscriptions) * 12L
 }
+

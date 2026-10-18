@@ -124,4 +124,29 @@ class AnalyticsTest {
         assertEquals(-1000L, Analytics.previousPeriodNet(listOf(refunded), Period.MONTH, date))
     }
 
+    @Test fun payoutEstimatesCalculatesHoldingAndReady() {
+        // date is 2026-10-16. Next payout should be 2026-10-28 (in 12 days).
+        // 13-day holding cutoff is 2026-10-03.
+        val oldSale = sale("old", 5000, at = "2026-10-01T10:00:00Z") // ready
+        val recentSale = sale("recent", 3000, at = "2026-10-10T10:00:00Z") // holding
+        val est = Analytics.payoutEstimates(listOf(oldSale, recentSale), date)
+        assertEquals(5000L, est.readyUsdCents)
+        assertEquals(3000L, est.holdingUsdCents)
+        assertEquals(LocalDate.of(2026, 10, 28), est.nextPayoutDate)
+        assertEquals(12L, est.daysUntilNextPayout)
+    }
+
+    @Test fun mrrCalculationNormalizesBillingIntervals() {
+        val monthly = Subscription("1", "1", "Monthly", "", "active", "", "", false,
+            catalogPriceCents = 2900L, billingInterval = "month", billingIntervalCount = 1)
+        val yearly = Subscription("2", "1", "Yearly", "", "active", "", "", false,
+            catalogPriceCents = 12000L, billingInterval = "year", billingIntervalCount = 1)
+        val cancelled = Subscription("3", "1", "Cancelled", "", "cancelled", "", "", false,
+            catalogPriceCents = 5000L, billingInterval = "month")
+        val mrr = Analytics.mrrEstimateUsdCents(listOf(monthly, yearly, cancelled))
+        // 2900 + 12000/12 = 2900 + 1000 = 3900
+        assertEquals(3900L, mrr)
+        assertEquals(3900L * 12L, Analytics.arrEstimateUsdCents(listOf(monthly, yearly, cancelled)))
+    }
 }
+
