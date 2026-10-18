@@ -1,3 +1,7 @@
+import java.io.File
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.plugin.compose")
@@ -18,17 +22,43 @@ android {
         versionName = "1.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-    val releaseKeystorePath = System.getenv("LEMON_KEYSTORE_PATH")
-    val releasePassword = System.getenv("LEMON_KEYSTORE_PASSWORD")
-    val hasSigning = !releaseKeystorePath.isNullOrBlank() && !releasePassword.isNullOrBlank()
+    val keystorePropsFile = rootProject.file("keystore.properties")
+    val keystoreProps = Properties()
+    if (keystorePropsFile.exists()) {
+        FileInputStream(keystorePropsFile).use { keystoreProps.load(it) }
+    }
+
+    val storeFilePath: String? = keystoreProps.getProperty("storeFile") ?: System.getenv("LEMON_KEYSTORE_PATH")
+    val resolvedStoreFile: File? = when {
+        !storeFilePath.isNullOrBlank() -> {
+            val f = File(storeFilePath)
+            if (f.isAbsolute && f.exists()) f
+            else if (rootProject.file(storeFilePath).exists()) rootProject.file(storeFilePath)
+            else file(storeFilePath)
+        }
+        rootProject.file("keystore/release.jks").exists() -> rootProject.file("keystore/release.jks")
+        else -> null
+    }
+
+    val releaseStorePassword: String? = keystoreProps.getProperty("storePassword")
+        ?: System.getenv("LEMON_KEYSTORE_PASSWORD")
+
+    val releaseKeyAlias: String = keystoreProps.getProperty("keyAlias")
+        ?: System.getenv("LEMON_KEY_ALIAS")
+        ?: "lemon-dashboard-release"
+
+    val releaseKeyPassword: String? = keystoreProps.getProperty("keyPassword")
+        ?: releaseStorePassword
+
+    val hasSigning: Boolean = resolvedStoreFile != null && resolvedStoreFile.exists() && !releaseStorePassword.isNullOrBlank()
 
     signingConfigs {
         create("persistentRelease") {
             if (hasSigning) {
-                storeFile = file(releaseKeystorePath!!)
-                storePassword = releasePassword
-                keyAlias = "lemon-dashboard-release"
-                keyPassword = releasePassword
+                storeFile = resolvedStoreFile
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
                 storeType = "PKCS12"
             }
         }

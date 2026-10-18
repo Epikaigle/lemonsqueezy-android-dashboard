@@ -62,7 +62,7 @@ jobs:
           APK="app/build/outputs/apk/release/app-release.apk"
           "$SIGNER" verify --verbose --print-certs "$APK"
           FINGERPRINT="$("$SIGNER" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
-          EXPECTED="9bd95333a255e160accb1c8cc4e017ad39fdf2a81058224ded5979cbebd79ef4"
+          EXPECTED="e5eee894f30aa766d9d6bc9a3901c7d955172dd45ed282d331e4e83e8152f908"
           if [[ "$FINGERPRINT" != "$EXPECTED" ]]; then
             echo "::error::Signature release incorrecte : empreinte du certificat différente !"
             exit 1

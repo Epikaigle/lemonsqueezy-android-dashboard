@@ -10,12 +10,15 @@ captures/
 .cxx/
 *.apk
 *.aab
+*.sha256
 # Credentials
 *.jks
 *.keystore
 .env
 .env.*
 secrets.properties
+keystore.properties
+keystore/
 
 # Firebase config supplied privately at build time
 app/google-services.json
