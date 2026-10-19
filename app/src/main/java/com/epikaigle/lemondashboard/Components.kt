@@ -1,8 +1,11 @@
 @file:Suppress("DEPRECATION")
 package com.epikaigle.lemondashboard
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -284,8 +287,10 @@ fun InteractiveChartCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        val isHourly = periodTitle.contains("Aujourd'hui", ignoreCase = true) || (pair.first.length <= 2 && pair.first.all { it.isDigit() })
+                        val dateLabel = if (isHourly) "Heure : ${pair.first}h00" else "Période : ${pair.first}"
                         Text(
-                            text = "Date : ${pair.first}",
+                            text = dateLabel,
                             color = TextSecondary,
                             fontSize = 12.sp
                         )
@@ -392,11 +397,16 @@ fun InteractiveChartCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(buckets.firstOrNull()?.first.orEmpty(), color = TextMuted, fontSize = 11.sp)
+                val isHourly = periodTitle.contains("Aujourd'hui", ignoreCase = true) || ((buckets.firstOrNull()?.first?.length ?: 0) <= 2 && buckets.firstOrNull()?.first?.all { it.isDigit() } == true)
+                val firstLabel = buckets.firstOrNull()?.first.orEmpty().let { if (isHourly && it.isNotBlank()) "${it}h" else it }
+                val midLabel = buckets.getOrNull(buckets.size / 2)?.first.orEmpty().let { if (isHourly && it.isNotBlank()) "${it}h" else it }
+                val lastLabel = buckets.lastOrNull()?.first.orEmpty().let { if (isHourly && it.isNotBlank()) "${it}h" else it }
+
+                Text(firstLabel, color = TextMuted, fontSize = 11.sp)
                 if (buckets.size > 2) {
-                    Text(buckets.getOrNull(buckets.size / 2)?.first.orEmpty(), color = TextMuted, fontSize = 11.sp)
+                    Text(midLabel, color = TextMuted, fontSize = 11.sp)
                 }
-                Text(buckets.lastOrNull()?.first.orEmpty(), color = TextMuted, fontSize = 11.sp)
+                Text(lastLabel, color = TextMuted, fontSize = 11.sp)
             }
         }
     }
@@ -523,6 +533,32 @@ fun TransactionDetailSheet(
                         Text("Transaction effectuée en MODE TEST", fontSize = 12.sp, color = Lemon, fontWeight = FontWeight.Medium)
                     }
                 }
+            }
+
+            OutlinedButton(
+                onClick = {
+                    val shareText = buildString {
+                        appendLine("🧾 Transaction Lemon Squeezy :")
+                        appendLine("• Produit : ${sale.product}")
+                        appendLine("• Référence : #${sale.id}")
+                        appendLine("• Date : ${friendlyDateTime(sale.createdAt)}")
+                        appendLine("• Montant net : ${Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd)}")
+                        appendLine("• Statut : ${sale.status}")
+                    }
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "Commande Lemon Squeezy #${sale.id}")
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                    }
+                    context.startActivity(Intent.createChooser(intent, "Partager la transaction"))
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+            ) {
+                Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Partager le récapitulatif", color = Lemon, fontWeight = FontWeight.Bold)
             }
 
             Button(
@@ -918,18 +954,51 @@ fun LicenseKeyDetailSheet(
                     fontWeight = FontWeight.Medium
                 )
                 Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(license.key))
-                        Toast.makeText(context, "Clé de licence copiée !", Toast.LENGTH_SHORT).show()
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Copier la clé de licence", fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(license.key))
+                            Toast.makeText(context, "Clé de licence copiée !", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Copier", fontWeight = FontWeight.Bold)
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            val shareText = buildString {
+                                appendLine("🔑 Clé de licence : ${license.productName.ifBlank { "Logiciel" }}")
+                                appendLine(license.key)
+                                if (license.expiresAt.isNotBlank()) {
+                                    appendLine("Date d'expiration : ${friendlyDate(license.expiresAt)}")
+                                }
+                                if (license.activationLimit > 0) {
+                                    appendLine("Limite : ${license.activationLimit} machine(s)")
+                                }
+                            }
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "Clé de licence ${license.productName}")
+                                putExtra(Intent.EXTRA_TEXT, shareText)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Partager la clé"))
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+                    ) {
+                        Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Partager", color = Lemon, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
@@ -1158,9 +1227,15 @@ fun FeeCalculatorDialog(
 
                 OutlinedTextField(
                     value = priceInput,
-                    onValueChange = { priceInput = it.filter { c -> c.isDigit() || c == '.' } },
+                    onValueChange = { input ->
+                        val clean = input.replace(',', '.')
+                        if (clean.count { it == '.' } <= 1 && clean.all { it.isDigit() || it == '.' }) {
+                            priceInput = clean
+                        }
+                    },
                     label = { Text("Prix de vente du logiciel ($currency)", color = TextMuted) },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Lemon,
                         unfocusedBorderColor = DarkBorder,
@@ -1170,6 +1245,28 @@ fun FeeCalculatorDialog(
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
+
+                // Quick Price Presets
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    listOf("9", "19", "29", "49", "99", "149", "199").forEach { preset ->
+                        FilterChip(
+                            selected = priceInput == preset,
+                            onClick = { priceInput = preset },
+                            label = { Text("$preset $currency", fontSize = 11.sp) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = Lemon,
+                                selectedLabelColor = DarkBackground,
+                                containerColor = DarkSurfaceVariant,
+                                labelColor = TextSecondary
+                            )
+                        )
+                    }
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -1190,6 +1287,7 @@ fun FeeCalculatorDialog(
                     border = BorderStroke(1.dp, DarkBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
+                    val marginPercent = if (fee.grossCents > 0L) (fee.netCents.toDouble() / fee.grossCents.toDouble()) * 100.0 else 0.0
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         DetailRow("Prix brut", Analytics.money(fee.grossCents, currency, eurPerUsd))
                         DetailRow(
@@ -1202,6 +1300,11 @@ fun FeeCalculatorDialog(
                             "Bénéfice net dans votre poche",
                             Analytics.money(fee.netCents, currency, eurPerUsd),
                             isBold = true,
+                            valueColor = MintSuccessLight
+                        )
+                        DetailRow(
+                            "Marge nette conservée",
+                            String.format(Locale.US, "%.1f%%", marginPercent),
                             valueColor = MintSuccessLight
                         )
                     }

@@ -18,7 +18,10 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.runtime.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +71,10 @@ class MainActivity : ComponentActivity() {
 @Composable
 private fun LemonApp(vm: DashboardViewModel) {
     val s = vm.state
+
+    BackHandler(enabled = s.connected && s.tab != 0) {
+        vm.tab(0)
+    }
 
     Scaffold(
         containerColor = DarkBackground,
@@ -218,12 +225,19 @@ private fun LemonApp(vm: DashboardViewModel) {
                     val filteredSubs = remember(snapshot, s.selectedStore, s.includeTest) {
                         Analytics.selectedSubscriptions(snapshot, s.selectedStore, s.includeTest)
                     }
-                    when (s.tab) {
-                        0 -> OverviewScreen(snapshot, filteredSales, filteredSubs, s, vm)
-                        1 -> SalesScreen(snapshot, filteredSales, s, vm)
-                        2 -> SubscriptionsScreen(snapshot, filteredSubs, s, vm)
-                        3 -> PayoutScreen(snapshot, s.currency)
-                        else -> SettingsScreen(snapshot, s, vm)
+                    @OptIn(ExperimentalMaterial3Api::class)
+                    PullToRefreshBox(
+                        isRefreshing = s.loading,
+                        onRefresh = vm::refresh,
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        when (s.tab) {
+                            0 -> OverviewScreen(snapshot, filteredSales, filteredSubs, s, vm)
+                            1 -> SalesScreen(snapshot, filteredSales, s, vm)
+                            2 -> SubscriptionsScreen(snapshot, filteredSubs, s, vm)
+                            3 -> PayoutScreen(snapshot, s.currency)
+                            else -> SettingsScreen(snapshot, s, vm)
+                        }
                     }
                 }
             }

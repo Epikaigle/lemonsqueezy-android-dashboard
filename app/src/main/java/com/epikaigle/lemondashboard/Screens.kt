@@ -60,8 +60,11 @@ fun LoginScreen(loading: Boolean, onConnect: (String) -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .imePadding()
             .verticalScroll(rememberScrollState())
-            .padding(24.dp),
+            .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -736,12 +739,14 @@ fun SaleItemCard(
                     fontSize = 15.sp,
                     color = if (sale.paid) TextPrimary else TextMuted
                 )
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = if (sale.paid) Analytics.localMoney(originalNet, sale.currency) else "Non encaissé",
-                    color = TextSecondary,
-                    fontSize = 11.sp
-                )
+                if (!sale.paid || sale.currency.uppercase() != currency.uppercase()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (sale.paid) Analytics.localMoney(originalNet, sale.currency) else "Non encaissé",
+                        color = TextSecondary,
+                        fontSize = 11.sp
+                    )
+                }
             }
         }
     }
@@ -832,15 +837,24 @@ fun SubscriptionsScreen(
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (activeSubTab == 0) Lemon else Color.Transparent)
                         .clickable { activeSubTab = 0 }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Abonnements (${subscriptions.size})",
-                        color = if (activeSubTab == 0) DarkBackground else TextSecondary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Autorenew,
+                            contentDescription = null,
+                            tint = if (activeSubTab == 0) DarkBackground else TextSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Abonnements (${subscriptions.size})",
+                            color = if (activeSubTab == 0) DarkBackground else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
                 Box(
                     modifier = Modifier
@@ -848,15 +862,24 @@ fun SubscriptionsScreen(
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (activeSubTab == 1) Lemon else Color.Transparent)
                         .clickable { activeSubTab = 1 }
-                        .padding(vertical = 10.dp),
+                        .padding(vertical = 9.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = "Clés de Licence (${licenseKeys.size})",
-                        color = if (activeSubTab == 1) DarkBackground else TextSecondary,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.VpnKey,
+                            contentDescription = null,
+                            tint = if (activeSubTab == 1) DarkBackground else TextSecondary,
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            text = "Licences (${licenseKeys.size})",
+                            color = if (activeSubTab == 1) DarkBackground else TextSecondary,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
             }
         }
@@ -1927,6 +1950,7 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
 
 @Composable
 fun StoreChips(snapshot: Snapshot, selected: String, onSelect: (String) -> Unit) {
+    if (snapshot.stores.size <= 1) return
     Row(
         modifier = Modifier
             .fillMaxWidth()
