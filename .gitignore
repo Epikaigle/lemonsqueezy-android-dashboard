@@ -20,6 +20,10 @@ secrets.properties
 keystore.properties
 keystore/
 
+# Dependencies
+node_modules/
+**/node_modules/
+
 # Firebase config supplied privately at build time
 app/google-services.json
 **/google-services.json
