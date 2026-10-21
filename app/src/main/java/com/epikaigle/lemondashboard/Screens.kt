@@ -1632,6 +1632,9 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
         // Push Notifications
         PushSettingsCard(vm, s)
 
+        // Application Updates
+        AppUpdateCard(vm, s)
+
         // Synchronization
         DashboardCard {
             Text("Synchronisation & Cache", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
@@ -1945,6 +1948,308 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
                 fontWeight = FontWeight.Medium
             )
         }
+    }
+}
+
+@Composable
+fun AppUpdateCard(vm: DashboardViewModel, s: UiState) {
+    val context = LocalContext.current
+    var showPermissionDialog by remember { mutableStateOf(false) }
+
+    DashboardCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.SystemUpdate,
+                    contentDescription = null,
+                    tint = Lemon,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Mise à jour de l'app", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            }
+            Surface(
+                color = DarkSurfaceVariant,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text(
+                    text = "v${BuildConfig.VERSION_NAME}",
+                    color = Lemon,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Vérification et installation automatique des dernières versions publiées sur GitHub.",
+            color = TextSecondary,
+            fontSize = 12.sp,
+            lineHeight = 17.sp
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        when (val status = s.updateStatus) {
+            is UpdateStatus.Idle -> {
+                OutlinedButton(
+                    onClick = { vm.checkForUpdate(isManual = true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Rechercher une mise à jour", color = Lemon, fontWeight = FontWeight.Bold)
+                }
+            }
+            is UpdateStatus.Checking -> {
+                Surface(
+                    color = DarkSurfaceVariant,
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = Lemon,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "Recherche sur GitHub Releases…",
+                            color = TextSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+                }
+            }
+            is UpdateStatus.UpToDate -> {
+                Surface(
+                    color = MintSuccessContainer.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Votre application est à jour (v${status.latestVersion})",
+                            color = MintSuccessLight,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { vm.checkForUpdate(isManual = true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, DarkBorder)
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Revérifier", color = TextSecondary, fontSize = 12.sp)
+                }
+            }
+            is UpdateStatus.Available -> {
+                val info = status.info
+                Surface(
+                    color = Lemon.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Lemon.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.NewReleases, contentDescription = null, tint = Lemon, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Version v${info.latestVersion} disponible",
+                                color = Lemon,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                        if (info.releaseNotes.isNotBlank()) {
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = info.releaseNotes.take(160) + if (info.releaseNotes.length > 160) "…" else "",
+                                color = TextSecondary,
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Taille du fichier : ${AppUpdateManager.formatFileSize(info.apkSize)}",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = { vm.startDownloadUpdate(context, info) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                ) {
+                    Icon(Icons.Default.Download, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Télécharger la version v${info.latestVersion}", fontWeight = FontWeight.Bold)
+                }
+            }
+            is UpdateStatus.Downloading -> {
+                val info = status.info
+                Column(Modifier.fillMaxWidth()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Téléchargement de la v${info.latestVersion}…",
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            "${(status.progress * 100).toInt()}%",
+                            color = Lemon,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { status.progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp)),
+                        color = Lemon,
+                        trackColor = DarkSurfaceVariant
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "${AppUpdateManager.formatFileSize(status.downloadedBytes)} / ${AppUpdateManager.formatFileSize(status.totalBytes)}",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+            is UpdateStatus.ReadyToInstall -> {
+                Surface(
+                    color = MintSuccessContainer.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, MintSuccess.copy(alpha = 0.4f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Mise à jour v${status.info.latestVersion} prête",
+                                color = MintSuccessLight,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Le fichier d'installation est téléchargé. Appuyez pour lancer l'installation.",
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = {
+                        if (AppUpdateManager.canRequestPackageInstalls(context)) {
+                            AppUpdateManager.installApk(context, status.apkFile)
+                        } else {
+                            showPermissionDialog = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                ) {
+                    Icon(Icons.Default.InstallMobile, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Installer maintenant", fontWeight = FontWeight.Bold)
+                }
+            }
+            is UpdateStatus.Error -> {
+                Surface(
+                    color = CoralDangerContainer.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(status.message, color = CoralDangerLight, fontSize = 12.sp)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(
+                    onClick = { vm.checkForUpdate(isManual = true) },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, CoralDanger.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Réessayer", color = CoralDangerLight, fontSize = 12.sp)
+                }
+            }
+        }
+    }
+
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text("Autorisation requise", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Android nécessite que vous autorisiez Lemon Dashboard à installer des applications. Cliquez sur « Ouvrir les paramètres » et activez « Autoriser cette source ».")
+            },
+            containerColor = DarkSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary,
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        context.startActivity(AppUpdateManager.createInstallPermissionIntent(context))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                ) {
+                    Text("Ouvrir les paramètres", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
     }
 }
 

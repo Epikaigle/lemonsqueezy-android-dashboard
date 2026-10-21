@@ -15,6 +15,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
+sealed interface UpdateStatus {
+    object Idle : UpdateStatus
+    object Checking : UpdateStatus
+    data class UpToDate(val latestVersion: String, val checkedAt: Long = System.currentTimeMillis()) : UpdateStatus
+    data class Available(val info: AppUpdateInfo) : UpdateStatus
+    data class Downloading(val info: AppUpdateInfo, val progress: Float, val downloadedBytes: Long, val totalBytes: Long) : UpdateStatus
+    data class ReadyToInstall(val info: AppUpdateInfo, val apkFile: java.io.File) : UpdateStatus
+    data class Error(val message: String) : UpdateStatus
+}
+
 data class UiState(
     val connected: Boolean = false,
     val initializing: Boolean = false,
@@ -30,7 +40,9 @@ data class UiState(
     val pushEnabled: Boolean = false,
     val pushOrigin: String = "",
     val pushBusy: Boolean = false,
-    val pushMessage: String = ""
+    val pushMessage: String = "",
+    val updateStatus: UpdateStatus = UpdateStatus.Idle,
+    val showUpdateDialog: Boolean = false
 )
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
@@ -52,6 +64,9 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         private set
 
     init {
+        viewModelScope.launch {
+            checkForUpdate(isManual = false)
+        }
         if (state.connected) {
             val expected = generation
             operation = viewModelScope.launch {
@@ -243,6 +258,76 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
         }
+    }
+
+    fun checkForUpdate(isManual: Boolean = false) {
+        if (state.updateStatus is UpdateStatus.Checking || state.updateStatus is UpdateStatus.Downloading) return
+        if (isManual) {
+            state = state.copy(updateStatus = UpdateStatus.Checking)
+        }
+        viewModelScope.launch {
+            try {
+                val info = AppUpdateManager.checkForUpdate()
+                if (info != null) {
+                    if (info.isUpdateAvailable) {
+                        state = state.copy(
+                            updateStatus = UpdateStatus.Available(info),
+                            showUpdateDialog = true
+                        )
+                    } else {
+                        state = state.copy(
+                            updateStatus = UpdateStatus.UpToDate(info.latestVersion)
+                        )
+                    }
+                } else if (isManual) {
+                    state = state.copy(
+                        updateStatus = UpdateStatus.UpToDate(BuildConfig.VERSION_NAME)
+                    )
+                }
+            } catch (e: Exception) {
+                if (isManual) {
+                    state = state.copy(
+                        updateStatus = UpdateStatus.Error(e.message ?: "Impossible de vérifier les mises à jour.")
+                    )
+                }
+            }
+        }
+    }
+
+    fun startDownloadUpdate(context: android.content.Context, info: AppUpdateInfo) {
+        if (state.updateStatus is UpdateStatus.Downloading) return
+        state = state.copy(
+            updateStatus = UpdateStatus.Downloading(info, 0f, 0L, info.apkSize)
+        )
+        viewModelScope.launch {
+            try {
+                val file = AppUpdateManager.downloadApk(
+                    context = context.applicationContext,
+                    apkUrl = info.apkUrl,
+                    targetVersion = info.latestVersion
+                ) { bytesRead, totalBytes ->
+                    val progress = if (totalBytes > 0) (bytesRead.toFloat() / totalBytes).coerceIn(0f, 1f) else 0f
+                    state = state.copy(
+                        updateStatus = UpdateStatus.Downloading(info, progress, bytesRead, totalBytes)
+                    )
+                }
+                state = state.copy(
+                    updateStatus = UpdateStatus.ReadyToInstall(info, file)
+                )
+            } catch (e: Exception) {
+                state = state.copy(
+                    updateStatus = UpdateStatus.Error("Erreur téléchargement : ${e.message ?: "Erreur réseau"}")
+                )
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        state = state.copy(showUpdateDialog = false)
+    }
+
+    fun showUpdateDialog() {
+        state = state.copy(showUpdateDialog = true)
     }
 
     override fun onCleared() {

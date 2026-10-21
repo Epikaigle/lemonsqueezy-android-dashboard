@@ -30,6 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import androidx.activity.viewModels
 
@@ -83,7 +86,9 @@ private fun LemonApp(vm: DashboardViewModel) {
                 Header(
                     busy = s.loading,
                     lastSync = s.snapshot?.fetchedAt.orEmpty(),
-                    onRefresh = vm::refresh
+                    onRefresh = vm::refresh,
+                    hasUpdate = s.updateStatus is UpdateStatus.Available,
+                    onOpenUpdate = vm::showUpdateDialog
                 )
             }
         },
@@ -243,6 +248,10 @@ private fun LemonApp(vm: DashboardViewModel) {
             }
         }
     }
+
+    if (s.showUpdateDialog) {
+        InAppUpdateDialog(vm, s)
+    }
 }
 
 private data class NavigationItem(
@@ -253,7 +262,13 @@ private data class NavigationItem(
 )
 
 @Composable
-private fun Header(busy: Boolean, lastSync: String, onRefresh: () -> Unit) {
+private fun Header(
+    busy: Boolean,
+    lastSync: String,
+    onRefresh: () -> Unit,
+    hasUpdate: Boolean = false,
+    onOpenUpdate: () -> Unit = {}
+) {
     // Rotation animation when syncing
     val infiniteTransition = rememberInfiniteTransition(label = "refreshRotation")
     val angle by infiniteTransition.animateFloat(
@@ -307,6 +322,20 @@ private fun Header(busy: Boolean, lastSync: String, onRefresh: () -> Unit) {
                     color = TextSecondary,
                     fontSize = 11.sp
                 )
+            }
+
+            if (hasUpdate) {
+                IconButton(
+                    onClick = onOpenUpdate,
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.NewReleases,
+                        contentDescription = "Mise à jour disponible",
+                        tint = Lemon,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
 
             IconButton(
@@ -363,5 +392,216 @@ private fun EmptyArea(title: String, message: String, retry: () -> Unit, disconn
         TextButton(onClick = disconnect) {
             Text("Effacer la clé et se déconnecter", color = CoralDangerLight)
         }
+    }
+}
+
+@Composable
+private fun InAppUpdateDialog(vm: DashboardViewModel, s: UiState) {
+    val context = LocalContext.current
+    var showPermissionDialog by remember { mutableStateOf(false) }
+
+    when (val status = s.updateStatus) {
+        is UpdateStatus.Available -> {
+            val info = status.info
+            AlertDialog(
+                onDismissRequest = vm::dismissUpdateDialog,
+                icon = {
+                    Icon(
+                        Icons.Default.RocketLaunch,
+                        contentDescription = null,
+                        tint = Lemon,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text(
+                        "Mise à jour disponible 🚀",
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 18.sp
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Surface(
+                            color = DarkSurfaceVariant,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Nouvelle version :", color = TextSecondary, fontSize = 12.sp)
+                                Text("v${info.latestVersion}", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+
+                        if (info.releaseNotes.isNotBlank()) {
+                            Text("Nouveautés :", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = TextPrimary)
+                            Surface(
+                                color = DarkBackground,
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = info.releaseNotes,
+                                    color = TextSecondary,
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp,
+                                    modifier = Modifier.padding(10.dp)
+                                )
+                            }
+                        }
+
+                        Text(
+                            "Taille du fichier : ${AppUpdateManager.formatFileSize(info.apkSize)}",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                },
+                containerColor = DarkSurface,
+                titleContentColor = TextPrimary,
+                textContentColor = TextSecondary,
+                confirmButton = {
+                    Button(
+                        onClick = { vm.startDownloadUpdate(context, info) },
+                        colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Download, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Télécharger & Installer", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = vm::dismissUpdateDialog) {
+                        Text("Plus tard", color = TextSecondary)
+                    }
+                }
+            )
+        }
+        is UpdateStatus.Downloading -> {
+            val info = status.info
+            AlertDialog(
+                onDismissRequest = {},
+                title = {
+                    Text("Téléchargement de la mise à jour…", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("v${info.latestVersion}", color = Lemon, fontWeight = FontWeight.Bold)
+                            Text("${(status.progress * 100).toInt()}%", color = Lemon, fontWeight = FontWeight.Bold)
+                        }
+                        LinearProgressIndicator(
+                            progress = { status.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp)),
+                            color = Lemon,
+                            trackColor = DarkSurfaceVariant
+                        )
+                        Text(
+                            "${AppUpdateManager.formatFileSize(status.downloadedBytes)} sur ${AppUpdateManager.formatFileSize(status.totalBytes)}",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+                },
+                containerColor = DarkSurface,
+                titleContentColor = TextPrimary,
+                textContentColor = TextSecondary,
+                confirmButton = {}
+            )
+        }
+        is UpdateStatus.ReadyToInstall -> {
+            AlertDialog(
+                onDismissRequest = vm::dismissUpdateDialog,
+                icon = {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = null,
+                        tint = MintSuccess,
+                        modifier = Modifier.size(32.dp)
+                    )
+                },
+                title = {
+                    Text("Mise à jour prête !", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                },
+                text = {
+                    Text(
+                        "La version v${status.info.latestVersion} a été téléchargée avec succès. Appuyez sur Installer pour finaliser la mise à jour.",
+                        color = TextSecondary,
+                        fontSize = 13.sp
+                    )
+                },
+                containerColor = DarkSurface,
+                titleContentColor = TextPrimary,
+                textContentColor = TextSecondary,
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (AppUpdateManager.canRequestPackageInstalls(context)) {
+                                AppUpdateManager.installApk(context, status.apkFile)
+                            } else {
+                                showPermissionDialog = true
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.InstallMobile, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Installer maintenant", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = vm::dismissUpdateDialog) {
+                        Text("Fermer", color = TextSecondary)
+                    }
+                }
+            )
+        }
+        else -> Unit
+    }
+
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text("Autorisation requise", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Android nécessite que vous autorisiez Lemon Dashboard à installer des applications. Cliquez sur « Ouvrir les paramètres » et activez « Autoriser cette source ».")
+            },
+            containerColor = DarkSurface,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary,
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        context.startActivity(AppUpdateManager.createInstallPermissionIntent(context))
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                ) {
+                    Text("Ouvrir les paramètres", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Annuler", color = TextSecondary)
+                }
+            }
+        )
     }
 }
