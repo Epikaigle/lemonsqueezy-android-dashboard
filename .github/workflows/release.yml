@@ -67,25 +67,34 @@ jobs:
             echo "::error::Signature release incorrecte : empreinte du certificat différente !"
             exit 1
           fi
+      - name: Extract App Version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(grep 'versionName =' app/build.gradle.kts | head -n1 | sed -E 's/.*"([^"]+)".*/\1/')"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
       - name: Export signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: LemonDashboard-v1.4.0-persistent-signed
+          name: LemonDashboard-${{ steps.version.outputs.tag }}-persistent-signed
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 90
       - name: Publish verified signed APK
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           set -euo pipefail
-          TAG="v1.4.0"
-          cp app/build/outputs/apk/release/app-release.apk "LemonDashboard-v1.4.0.apk"
-          sha256sum "LemonDashboard-v1.4.0.apk" > "LemonDashboard-v1.4.0.apk.sha256"
+          APK_NAME="LemonDashboard-${TAG}.apk"
+          SHA_NAME="${APK_NAME}.sha256"
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          sha256sum "$APK_NAME" > "$SHA_NAME"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "LemonDashboard-v1.4.0.apk" "LemonDashboard-v1.4.0.apk.sha256" --clobber
+            gh release upload "$TAG" "$APK_NAME" "$SHA_NAME" --clobber
           else
-            gh release create "$TAG" "LemonDashboard-v1.4.0.apk" "LemonDashboard-v1.4.0.apk.sha256" --target "$GITHUB_SHA" --title "Lemon Dashboard v1.4.0" --notes "APK signée avec le certificat persistant vérifié."
+            gh release create "$TAG" "$APK_NAME" "$SHA_NAME" --target "$GITHUB_SHA" --title "Lemon Dashboard $TAG" --notes "APK signée officielle avec certificat persistant vérifié (SHA-256 e5eee894f30aa766d9d6bc9a3901c7d955172dd45ed282d331e4e83e8152f908)."
           fi
       - name: Forget local keystore
         if: always()

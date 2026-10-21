@@ -1,29 +1,251 @@
 <!doctype html>
 <html lang="fr">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#0d1516">
-<title>Lemon Dashboard — Android</title>
-<style>
-:root {color-scheme:dark;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#0d1516;color:#e8f4f1}
-body {margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px;box-sizing:border-box}
-main{width:min(100%,580px);background:#1a2627;border:1px solid #344845;border-radius:22px;padding:clamp(24px,5vw,44px)}
-h1{font-size:clamp(29px,5vw,43px);margin:10px 0}
-p{line-height:1.7;color:#b7ccca}
-small{color:#a4b8b5}
-a{color:#f6cd61}
-mark{background:#f6cd61;color:#0d1516;padding:5px 10px;border-radius:9px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0d1516">
+  <title>Lemon Dashboard — Android 17 / Pixel 7 Pro</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%200%20100%20100%22><text y=%22.9em%22 font-size=%2290%22>🍋</text></svg>">
+  <style>
+    :root {
+      --bg: #0d1516;
+      --card-bg: #152223;
+      --card-border: #223533;
+      --lemon: #f6cd61;
+      --lemon-dark: #d4aa33;
+      --mint: #10b981;
+      --mint-glow: rgba(16, 185, 129, 0.15);
+      --text: #e8f4f1;
+      --text-muted: #8da6a2;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: clamp(20px, 4vw, 40px) 16px;
+      line-height: 1.6;
+    }
+    .container {
+      width: min(100%, 720px);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    header {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 28px;
+      padding: clamp(28px, 6vw, 44px);
+      position: relative;
+      overflow: hidden;
+    }
+    header::before {
+      content: "";
+      position: absolute;
+      top: -60px;
+      right: -60px;
+      width: 180px;
+      height: 180px;
+      background: radial-gradient(circle, rgba(246, 205, 97, 0.18), transparent 70%);
+      pointer-events: none;
+    }
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(246, 205, 97, 0.15);
+      color: var(--lemon);
+      border: 1px solid rgba(246, 205, 97, 0.35);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 999px;
+      margin-bottom: 18px;
+    }
+    h1 {
+      font-size: clamp(32px, 6vw, 46px);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    p.lead {
+      color: var(--text-muted);
+      font-size: clamp(16px, 3.5vw, 18px);
+      margin-bottom: 24px;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 22px;
+      border-radius: 14px;
+      font-weight: 700;
+      font-size: 15px;
+      text-decoration: none;
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--lemon);
+      color: #0d1516;
+    }
+    .btn-primary:hover {
+      background: #fedc7a;
+    }
+    .btn-secondary {
+      background: #1e2e2d;
+      color: var(--text);
+      border: 1px solid var(--card-border);
+    }
+    .btn-secondary:hover {
+      background: #273b3a;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-icon {
+      font-size: 26px;
+      margin-bottom: 4px;
+    }
+    .card h2 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .card p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .security-box {
+      background: #111e1f;
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+    }
+    .security-box h3 {
+      font-size: 16px;
+      color: var(--mint);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .security-box code {
+      display: block;
+      background: #090e0f;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 12px;
+      color: var(--lemon);
+      word-break: break-all;
+      margin-top: 8px;
+      border: 1px solid #1a2826;
+    }
+    footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+      padding: 16px 0;
+    }
+    footer a { color: var(--lemon); text-decoration: none; }
+  </style>
 </head>
 <body>
-<main>
-<p><mark>Android 17 · Pixel 7 Pro</mark></p>
-<h1>🍋 Lemon Dashboard</h1>
-<p>Tableau de bord personnel au code source public pour consulter les ventes, renouvellements et abonnements Lemon Squeezy.</p>
-<p>La clé API est saisie dans l'application Android, pas sur ce site ni sur GitHub. Les données locales sont chiffrées.</p>
-<p><a href="https://github.com/Epikaigle/lemonsqueezy-android-dashboard">Code source, documentation et compilations sur GitHub →</a></p>
-<small>Projet indépendant, non affilié à Lemon Squeezy. Les montants affichés ne constituent pas un relevé officiel de versements.</small>
-</main>
+  <div class="container">
+    <header>
+      <div class="badge-pill">
+        <span>●</span> Version 1.5.3 · Android 17 (API 37)
+      </div>
+      <h1>🍋 Lemon Dashboard</h1>
+      <p class="lead">
+        Tableau de bord Android moderne en <strong>Jetpack Compose</strong> pour suivre vos ventes, MRR, licences logicielles et abonnements Lemon Squeezy en temps réel.
+      </p>
+      <div class="actions">
+        <a class="btn btn-primary" href="https://github.com/Epikaigle/lemonsqueezy-android-dashboard/releases/latest">
+          Télécharger l'APK v1.5.3 ↗
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/Epikaigle/lemonsqueezy-android-dashboard">
+          Voir le code source GitHub
+        </a>
+      </div>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="card-icon">⚡</div>
+        <h2>Mises à Jour In-App Directes</h2>
+        <p>Vérifie automatiquement les nouvelles versions publiées sur GitHub, télécharge l'APK et déclenche l'installation native sans dépendre d'un store.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🔔</div>
+        <h2>Alertes Push Instantanées</h2>
+        <p>Notifications en temps réel pour chaque vente, renouvellement ou remboursement via un microservice Cloudflare Edge + D1 + FCM.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🔑</div>
+        <h2>Licences SaaS & Activations</h2>
+        <p>Gérez vos clés logicielles, inspectez les machines activées et activez/désactivez des instances d'un simple clic.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">📊</div>
+        <h2>Métriques & Échéancier</h2>
+        <p>Calcul automatique du MRR, ARR, Churn, panier moyen, indicateur de santé commerçant et calendrier indicatif des versements.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🧾</div>
+        <h2>Calculateur MoR & Export CSV</h2>
+        <p>Simulateur des frais Merchant of Record Lemon Squeezy (5% + 0,50 $) et export comptable CSV universel via partage Android.</p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon">🛡️</div>
+        <h2>Chiffrement Matériel Keystore</h2>
+        <p>Vos clés API restent sur votre téléphone, protégées par AES-256-GCM et la puce matérielle sécurisée de votre Pixel.</p>
+      </div>
+    </div>
+
+    <div class="security-box">
+      <h3>🔒 Signature Release Persistante Garantie</h3>
+      <p style="font-size: 13px; color: var(--text-muted);">
+        Toutes les versions officielles sont signées avec la même clé cryptographique persistante pour garantir des mises à jour transparentes sans désinstaller l'application. Empreinte SHA-256 du certificat :
+      </p>
+      <code>e5eee894f30aa766d9d6bc9a3901c7d955172dd45ed282d331e4e83e8152f908</code>
+    </div>
+
+    <footer>
+      Application tierce indépendante, non affiliée à Lemon Squeezy.<br>
+      Code source libre & hébergé sur <a href="https://github.com/Epikaigle/lemonsqueezy-android-dashboard">GitHub</a>.
+    </footer>
+  </div>
 </body>
 </html>
