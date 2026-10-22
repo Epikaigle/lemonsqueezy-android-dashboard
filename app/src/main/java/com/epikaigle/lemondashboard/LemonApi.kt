@@ -139,21 +139,55 @@ class LemonApi {
                 null to ""
             }
         }
-        progress(if (full) "Rapprochement complet…" else "Mise à jour rapide (30 derniers jours)…")
-        progress("Récupération des boutiques…")
-        val stores = all("stores", token).map { s ->
-            val a = attr(s)
-            Store(s.getString("id"), a.str("name").ifBlank { "Boutique ${s.getString("id")}" }, a.str("currency").ifBlank { "USD" })
+        val storesDeferred = async(Dispatchers.IO) {
+            if (!full && previous?.stores?.isNotEmpty() == true) {
+                previous.stores
+            } else {
+                all("stores", token).map { s ->
+                    val a = attr(s)
+                    Store(s.getString("id"), a.str("name").ifBlank { "Boutique ${s.getString("id")}" }, a.str("currency").ifBlank { "USD" })
+                }
+            }
+        }
+        val rawSubsDeferred = async(Dispatchers.IO) { all("subscriptions", token) }
+        val ordersDeferred = async(Dispatchers.IO) { all("orders", token, cutoff) }
+        val invoicesDeferred = async(Dispatchers.IO) { all("subscription-invoices", token, cutoff) }
+        val pricesDeferred = async(Dispatchers.IO) {
+            all("prices", token).associateBy { it.optString("id") }
+        }
+        val licensesDeferred = async(Dispatchers.IO) {
+            try {
+                val rawLicenses = all("license-keys", token)
+                rawLicenses.map { raw ->
+                    val a = attr(raw)
+                    LicenseKey(
+                        id = raw.getString("id"),
+                        storeId = a.idValue("store_id"),
+                        orderId = a.idValue("order_id"),
+                        orderItemId = a.idValue("order_item_id"),
+                        productId = a.idValue("product_id"),
+                        productName = a.str("product_name"),
+                        key = a.str("key"),
+                        keyShort = a.str("key_short"),
+                        status = a.str("status"),
+                        activationLimit = a.optInt("activation_limit", 0),
+                        instancesCount = a.optInt("instances_count", 0),
+                        disabled = a.optBoolean("disabled", false),
+                        createdAt = a.str("created_at"),
+                        expiresAt = a.str("expires_at")
+                    )
+                }.sortedByDescending { it.createdAt }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                previous?.licenseKeys ?: emptyList()
+            }
         }
 
-        progress("Récupération des abonnements…")
-        val rawSubs = all("subscriptions", token)
-        progress("Récupération des commandes…")
-        val orders = all("orders", token, cutoff)
-        progress("Récupération des factures récurrentes…")
-        val invoices = all("subscription-invoices", token, cutoff)
-        progress("Récupération des tarifs…")
-        val pricesById = if (rawSubs.isEmpty()) emptyMap() else all("prices", token).associateBy { it.optString("id") }
+        val stores = storesDeferred.await()
+        val rawSubs = rawSubsDeferred.await()
+        val orders = ordersDeferred.await()
+        val invoices = invoicesDeferred.await()
+        val pricesById = pricesDeferred.await()
 
         // For the subscription card, reuse prior invoice metadata if the newest paid
         // invoice lies outside the fast refresh window.
@@ -192,34 +226,7 @@ class LemonApi {
         val fetchedSales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
         val sales = if (full) fetchedSales else fetchedSales + previous!!.sales
 
-        progress("Récupération des licences logicielles…")
-        val licenseKeys = try {
-            val rawLicenses = all("license-keys", token)
-            rawLicenses.map { raw ->
-                val a = attr(raw)
-                LicenseKey(
-                    id = raw.getString("id"),
-                    storeId = a.idValue("store_id"),
-                    orderId = a.idValue("order_id"),
-                    orderItemId = a.idValue("order_item_id"),
-                    productId = a.idValue("product_id"),
-                    productName = a.str("product_name"),
-                    key = a.str("key"),
-                    keyShort = a.str("key_short"),
-                    status = a.str("status"),
-                    activationLimit = a.optInt("activation_limit", 0),
-                    instancesCount = a.optInt("instances_count", 0),
-                    disabled = a.optBoolean("disabled", false),
-                    createdAt = a.str("created_at"),
-                    expiresAt = a.str("expires_at")
-                )
-            }.sortedByDescending { it.createdAt }
-        } catch (e: Exception) {
-            if (e is kotlinx.coroutines.CancellationException) throw e
-            previous?.licenseKeys ?: emptyList()
-        }
-
-        progress("Finalisation de la synchronisation…")
+        val licenseKeys = licensesDeferred.await()
         val fx = fxDeferred.await()
 
         Snapshot(

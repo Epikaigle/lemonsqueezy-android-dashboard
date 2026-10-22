@@ -18,8 +18,6 @@ import androidx.compose.material.icons.automirrored.outlined.ReceiptLong
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
 import androidx.compose.runtime.*
 import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
@@ -143,31 +141,7 @@ private fun LemonApp(vm: DashboardViewModel) {
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Loading Progress Bar
-            AnimatedVisibility(
-                visible = s.loading,
-                enter = fadeIn(),
-                exit = fadeOut()
-            ) {
-                Column {
-                    LinearProgressIndicator(
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Lemon,
-                        trackColor = DarkSurfaceVariant
-                    )
-                    if (s.progress.isNotBlank()) {
-                        Surface(color = DarkSurfaceVariant, modifier = Modifier.fillMaxWidth()) {
-                            Text(
-                                text = s.progress,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Lemon,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                    }
-                }
-            }
+
 
             // Error Callout Banner
             AnimatedVisibility(
@@ -230,12 +204,7 @@ private fun LemonApp(vm: DashboardViewModel) {
                     val filteredSubs = remember(snapshot, s.selectedStore, s.includeTest) {
                         Analytics.selectedSubscriptions(snapshot, s.selectedStore, s.includeTest)
                     }
-                    @OptIn(ExperimentalMaterial3Api::class)
-                    PullToRefreshBox(
-                        isRefreshing = s.loading,
-                        onRefresh = vm::refresh,
-                        modifier = Modifier.fillMaxSize()
-                    ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         when (s.tab) {
                             0 -> OverviewScreen(snapshot, filteredSales, filteredSubs, s, vm)
                             1 -> SalesScreen(snapshot, filteredSales, s, vm)
