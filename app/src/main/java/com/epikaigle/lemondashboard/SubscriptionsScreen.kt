@@ -1,14 +1,6 @@
 @file:Suppress("DEPRECATION")
 package com.epikaigle.lemondashboard
 
-import android.Manifest
-import android.content.Intent
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.FileProvider
-import java.io.File
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,14 +9,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -33,22 +21,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 import java.util.Locale
-
 
 @Composable
 fun SubscriptionsScreen(
@@ -109,13 +88,11 @@ fun SubscriptionsScreen(
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            Text("SaaS & Licences", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-            Spacer(Modifier.height(4.dp))
-            Text("Revenus récurrents (MRR), renouvellements, churn et gestion des clés de licence.", color = TextSecondary, fontSize = 13.sp)
+            Text("Abonnements & Licences", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         }
 
         item { StoreChips(snapshot, s.selectedStore, vm::store) }
@@ -125,17 +102,17 @@ fun SubscriptionsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(DarkSurfaceVariant)
-                    .padding(4.dp)
+                    .padding(3.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(9.dp))
                         .background(if (activeSubTab == 0) Lemon else Color.Transparent)
                         .clickable { activeSubTab = 0 }
-                        .padding(vertical = 9.dp),
+                        .padding(vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -157,10 +134,10 @@ fun SubscriptionsScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(9.dp))
                         .background(if (activeSubTab == 1) Lemon else Color.Transparent)
                         .clickable { activeSubTab = 1 }
-                        .padding(vertical = 9.dp),
+                        .padding(vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -187,7 +164,7 @@ fun SubscriptionsScreen(
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(22.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
                     border = BorderStroke(1.dp, DarkBorder)
                 ) {
@@ -195,7 +172,7 @@ fun SubscriptionsScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(Brush.linearGradient(listOf(PurpleAccentContainer, Color(0xFF1E1738), DarkSurface)))
-                            .padding(20.dp)
+                            .padding(16.dp)
                     ) {
                         Column {
                             Row(
@@ -219,26 +196,18 @@ fun SubscriptionsScreen(
                                         color = Color(0xFFDDD6FE),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
                             }
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
 
                             Text(
                                 text = Analytics.money(mrr, s.currency, snapshot.eurPerUsd),
                                 fontSize = 32.sp,
                                 fontWeight = FontWeight.ExtraBold,
                                 color = TextPrimary
-                            )
-
-                            Spacer(Modifier.height(4.dp))
-
-                            Text(
-                                text = "Estimé sur la base des ${counts["active"] ?: 0} abonnement(s) actif(s)",
-                                color = TextSecondary,
-                                fontSize = 12.sp
                             )
                         }
                     }
@@ -253,7 +222,6 @@ fun SubscriptionsScreen(
                         value = String.format(Locale.US, "%.1f%%", churnRate),
                         icon = Icons.Default.TrendingDown,
                         iconTint = if (churnRate > 5.0) CoralDangerLight else MintSuccessLight,
-                        subtitle = "Attrition abonnés",
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
@@ -261,7 +229,6 @@ fun SubscriptionsScreen(
                         value = String.format(Locale.US, "%.1f", quickRatio),
                         icon = Icons.Default.Speed,
                         iconTint = if (quickRatio >= 4.0) MintSuccessLight else if (quickRatio >= 1.0) AmberWarningLight else CoralDangerLight,
-                        subtitle = if (quickRatio >= 4.0) "Excellente rétention" else "Expansion/Départs",
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -271,12 +238,12 @@ fun SubscriptionsScreen(
             item {
                 Surface(
                     color = DarkSurfaceVariant,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, DarkBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -332,18 +299,18 @@ fun SubscriptionsScreen(
                     onValueChange = { subQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Rechercher un abonnement...", color = TextMuted) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                    placeholder = { Text("Rechercher un abonnement...", color = TextMuted, fontSize = 14.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                     trailingIcon = {
                         if (subQuery.isNotEmpty()) {
                             IconButton(onClick = { subQuery = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary)
+                                Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary, modifier = Modifier.size(18.dp))
                             }
                         }
                     },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Lemon,
                         unfocusedBorderColor = DarkBorder,
@@ -362,7 +329,7 @@ fun SubscriptionsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
                         "Tous (${subscriptions.size})",
@@ -373,7 +340,7 @@ fun SubscriptionsScreen(
                         FilterChip(
                             selected = subFilter == i,
                             onClick = { subFilter = i },
-                            label = { Text(label, fontWeight = if (subFilter == i) FontWeight.Bold else FontWeight.Normal) },
+                            label = { Text(label, fontSize = 12.sp, fontWeight = if (subFilter == i) FontWeight.Bold else FontWeight.Normal) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Lemon,
                                 selectedLabelColor = DarkBackground,
@@ -392,15 +359,15 @@ fun SubscriptionsScreen(
             }
 
             item {
-                Text("${filteredSubs.size} abonnement(s) affiché(s)", color = TextSecondary, fontSize = 12.sp)
+                Text("${filteredSubs.size} abonnement(s)", color = TextSecondary, fontSize = 12.sp)
             }
 
             if (filteredSubs.isEmpty()) {
                 item {
                     EmptyStateView(
                         icon = Icons.Default.Autorenew,
-                        title = if (subscriptions.isEmpty()) "Aucun abonnement enregistré" else "Aucun abonnement correspondant",
-                        message = if (subscriptions.isEmpty()) "Les abonnements apparaîtront automatiquement dès qu'un client souscrit."
+                        title = if (subscriptions.isEmpty()) "Aucun abonnement" else "Aucun résultat",
+                        message = if (subscriptions.isEmpty()) "Les abonnements apparaîtront lors des souscriptions."
                         else "Modifiez la recherche ou les filtres.",
                         actionText = if (subQuery.isNotBlank() || subFilter != 0) "Effacer les filtres" else null,
                         onAction = { subQuery = ""; subFilter = 0 }
@@ -431,7 +398,6 @@ fun SubscriptionsScreen(
                         value = activeLicCount.toString(),
                         icon = Icons.Default.VpnKey,
                         iconTint = MintSuccessLight,
-                        subtitle = "Sur ${licenseKeys.size} au total",
                         modifier = Modifier.weight(1f)
                     )
                     StatCard(
@@ -439,7 +405,6 @@ fun SubscriptionsScreen(
                         value = activeInstancesCount.toString(),
                         icon = Icons.Default.Devices,
                         iconTint = Lemon,
-                        subtitle = "Machines en service",
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -452,18 +417,18 @@ fun SubscriptionsScreen(
                     onValueChange = { licQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Rechercher une clé, produit ou commande...", color = TextMuted) },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                    placeholder = { Text("Rechercher une clé, produit...", color = TextMuted, fontSize = 14.sp) },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                     trailingIcon = {
                         if (licQuery.isNotEmpty()) {
                             IconButton(onClick = { licQuery = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary)
+                                Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary, modifier = Modifier.size(18.dp))
                             }
                         }
                     },
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                    shape = RoundedCornerShape(16.dp),
+                    shape = RoundedCornerShape(12.dp),
                     colors = OutlinedTextFieldDefaults.colors(
                         focusedBorderColor = Lemon,
                         unfocusedBorderColor = DarkBorder,
@@ -482,7 +447,7 @@ fun SubscriptionsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     listOf(
                         "Toutes (${licenseKeys.size})",
@@ -493,7 +458,7 @@ fun SubscriptionsScreen(
                         FilterChip(
                             selected = licFilter == i,
                             onClick = { licFilter = i },
-                            label = { Text(label, fontWeight = if (licFilter == i) FontWeight.Bold else FontWeight.Normal) },
+                            label = { Text(label, fontSize = 12.sp, fontWeight = if (licFilter == i) FontWeight.Bold else FontWeight.Normal) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Lemon,
                                 selectedLabelColor = DarkBackground,
@@ -512,16 +477,16 @@ fun SubscriptionsScreen(
             }
 
             item {
-                Text("${filteredLicenses.size} licence(s) affichée(s)", color = TextSecondary, fontSize = 12.sp)
+                Text("${filteredLicenses.size} licence(s)", color = TextSecondary, fontSize = 12.sp)
             }
 
             if (filteredLicenses.isEmpty()) {
                 item {
                     EmptyStateView(
                         icon = Icons.Default.VpnKey,
-                        title = if (licenseKeys.isEmpty()) "Aucune licence logicielle générée" else "Aucune licence correspondante",
-                        message = if (licenseKeys.isEmpty()) "Les clés de licence apparaîtront automatiquement lors de la vente de logiciels ou produits configurés avec le module licensing Lemon Squeezy."
-                        else "Modifiez les filtres ou le texte recherché.",
+                        title = if (licenseKeys.isEmpty()) "Aucune licence logicielle" else "Aucun résultat",
+                        message = if (licenseKeys.isEmpty()) "Les licences s'afficheront lors des ventes."
+                        else "Modifiez la recherche ou les filtres.",
                         actionText = if (licQuery.isNotBlank() || licFilter != 0) "Effacer les filtres" else null,
                         onAction = { licQuery = ""; licFilter = 0 }
                     )
@@ -565,14 +530,14 @@ fun SubscriptionItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = BorderStroke(1.dp, DarkBorder)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -582,7 +547,7 @@ fun SubscriptionItemCard(
                 Text(
                     text = sub.product.ifBlank { "Abonnement" },
                     fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
+                    fontSize = 15.sp,
                     color = TextPrimary,
                     modifier = Modifier.weight(1f),
                     maxLines = 1,
@@ -594,32 +559,32 @@ fun SubscriptionItemCard(
 
             if (sub.variant.isNotBlank()) {
                 Spacer(Modifier.height(2.dp))
-                Text(sub.variant, color = TextSecondary, fontSize = 12.sp)
+                Text(sub.variant, color = TextSecondary, fontSize = 11.sp)
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
 
             if (sub.renewsAt.isNotBlank() && sub.status !in setOf("cancelled", "expired")) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Event, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Prochain renouvellement : ${friendlyDate(sub.renewsAt)}", color = TextSecondary, fontSize = 12.sp)
+                    Icon(Icons.Default.Event, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Renouvellement : ${friendlyDate(sub.renewsAt)}", color = TextSecondary, fontSize = 11.sp)
                 }
             }
             if (sub.endsAt.isNotBlank()) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Default.Schedule, contentDescription = null, tint = TextMuted, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text(
-                        text = if (sub.status == "cancelled") "Annulé • accès jusqu'au ${friendlyDate(sub.endsAt)}"
+                        text = if (sub.status == "cancelled") "Annulé • fin le ${friendlyDate(sub.endsAt)}"
                         else "Fin d'accès : ${friendlyDate(sub.endsAt)}",
                         color = if (sub.status == "cancelled") CoralDangerLight else TextSecondary,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(4.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -634,7 +599,7 @@ fun SubscriptionItemCard(
                     val frequency = if (interval.isBlank()) "" else " / ${if (sub.billingIntervalCount > 1) "${sub.billingIntervalCount} " else ""}$interval"
                     Text(
                         "${Analytics.localMoney(sub.catalogPriceCents, sub.catalogCurrency)}$frequency",
-                        fontSize = 13.sp,
+                        fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Lemon
                     )
@@ -643,16 +608,15 @@ fun SubscriptionItemCard(
                     Text(
                         "Dernière facture : ${Analytics.money(sub.lastInvoiceUsdCents, currency, snapshot.eurPerUsd)}",
                         color = TextSecondary,
-                        fontSize = 12.sp
+                        fontSize = 11.sp
                     )
                 }
             }
 
             if (sub.testMode) {
-                Spacer(Modifier.height(4.dp))
-                Text("MODE TEST", color = Lemon, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(3.dp))
+                Text("MODE TEST", color = Lemon, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
-

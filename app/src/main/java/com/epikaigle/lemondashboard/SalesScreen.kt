@@ -1,14 +1,6 @@
 @file:Suppress("DEPRECATION")
 package com.epikaigle.lemondashboard
 
-import android.Manifest
-import android.content.Intent
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.FileProvider
-import java.io.File
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,38 +9,23 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
 
 @Composable
 fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: DashboardViewModel) {
@@ -84,13 +61,11 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
     }
 
     LazyColumn(
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 12.dp, bottom = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
-            Text("Transactions", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-            Spacer(Modifier.height(4.dp))
-            Text("Parcourez et inspectez les commandes, factures et remboursements.", color = TextSecondary, fontSize = 13.sp)
+            Text("Transactions", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
         }
 
         item { StoreChips(snapshot, s.selectedStore, vm::store) }
@@ -103,18 +78,18 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("Rechercher un produit, référence ou ID...", color = TextMuted) },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted) },
+                placeholder = { Text("Rechercher un produit, référence...", color = TextMuted, fontSize = 14.sp) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
                         IconButton(onClick = { query = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary)
+                            Icon(Icons.Default.Close, contentDescription = "Effacer", tint = TextSecondary, modifier = Modifier.size(18.dp))
                         }
                     }
                 },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(12.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Lemon,
                     unfocusedBorderColor = DarkBorder,
@@ -133,7 +108,7 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 val paidCount = inPeriod.count { it.paid && it.usdRefundCents == 0L }
                 val refundCount = inPeriod.count { it.usdRefundCents > 0L }
@@ -150,7 +125,7 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                     FilterChip(
                         selected = filter == i,
                         onClick = { filter = i },
-                        label = { Text(label, fontWeight = if (filter == i) FontWeight.Bold else FontWeight.Normal) },
+                        label = { Text(label, fontSize = 12.sp, fontWeight = if (filter == i) FontWeight.Bold else FontWeight.Normal) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Lemon,
                             selectedLabelColor = DarkBackground,
@@ -174,7 +149,7 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("${sortedRows.size} transaction(s) trouvée(s)", color = TextSecondary, fontSize = 12.sp)
+                Text("${sortedRows.size} résultat(s)", color = TextSecondary, fontSize = 12.sp)
                 Surface(
                     color = if (sortByAmountDesc) LemonContainer else DarkSurfaceVariant,
                     shape = RoundedCornerShape(8.dp),
@@ -207,9 +182,9 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
             item {
                 EmptyStateView(
                     icon = Icons.Default.ReceiptLong,
-                    title = if (inPeriod.isEmpty()) "Aucune transaction sur cette période" else "Aucun résultat trouvé",
-                    message = if (inPeriod.isEmpty()) "Sélectionnez une période plus large pour voir l'historique."
-                    else "Modifiez les termes de recherche ou réinitialisez les filtres.",
+                    title = if (inPeriod.isEmpty()) "Aucune transaction" else "Aucun résultat",
+                    message = if (inPeriod.isEmpty()) "Sélectionnez une période plus large."
+                    else "Modifiez les filtres de recherche.",
                     actionText = if (query.isNotBlank() || filter != 0) "Effacer les filtres" else null,
                     onAction = { query = ""; filter = 0 }
                 )
@@ -249,37 +224,38 @@ fun SaleItemCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = BorderStroke(1.dp, DarkBorder)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(15.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(RoundedCornerShape(13.dp))
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(if (sale.source == "Commande") MintSuccessContainer.copy(alpha = 0.5f) else LemonContainer.copy(alpha = 0.5f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (sale.source == "Commande") Icons.Default.ShoppingBag else Icons.Default.Autorenew,
                     contentDescription = null,
-                    tint = if (sale.source == "Commande") MintSuccessLight else Lemon
+                    tint = if (sale.source == "Commande") MintSuccessLight else Lemon,
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
 
             Column(Modifier.weight(1f)) {
                 Text(
                     text = sale.product,
                     fontWeight = FontWeight.SemiBold,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -287,11 +263,11 @@ fun SaleItemCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = "${sale.source} • ${friendlyDate(sale.createdAt)}",
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     color = TextSecondary
                 )
                 if (sale.testMode) {
-                    Text("MODE TEST", fontSize = 10.sp, color = Lemon, fontWeight = FontWeight.Bold)
+                    Text("MODE TEST", fontSize = 9.sp, color = Lemon, fontWeight = FontWeight.Bold)
                 }
                 if (!sale.paid) {
                     Text(sale.status, fontSize = 11.sp, color = CoralDangerLight, fontWeight = FontWeight.Medium)
@@ -311,7 +287,7 @@ fun SaleItemCard(
                 Text(
                     text = Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd),
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
+                    fontSize = 14.sp,
                     color = if (sale.paid) TextPrimary else TextMuted
                 )
                 if (!sale.paid || sale.currency.uppercase() != currency.uppercase()) {
@@ -326,4 +302,3 @@ fun SaleItemCard(
         }
     }
 }
-

@@ -10,45 +10,26 @@ import androidx.core.content.FileProvider
 import java.io.File
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalUriHandler
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.util.Locale
-
 
 @Composable
 fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
@@ -61,28 +42,29 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Réglages", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
-        Text("Préférences d'affichage, synchronisation et sécurité.", color = TextSecondary, fontSize = 13.sp)
+        Text("Réglages", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 
         // Store Selector
-        DashboardCard {
-            Text("Boutiques actives", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(8.dp))
-            StoreChips(snapshot, s.selectedStore, vm::store)
+        if (snapshot.stores.size > 1) {
+            DashboardCard {
+                Text("Boutiques actives", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                Spacer(Modifier.height(8.dp))
+                StoreChips(snapshot, s.selectedStore, vm::store)
+            }
         }
 
         // Currency Preference
         DashboardCard {
             Text("Devise d'affichage", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
                     selected = s.currency == "USD",
                     onClick = { vm.currency("USD") },
-                    label = { Text("USD ($)", fontWeight = FontWeight.SemiBold) },
+                    label = { Text("USD ($)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Lemon,
                         selectedLabelColor = DarkBackground,
@@ -93,7 +75,7 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                 FilterChip(
                     selected = s.currency == "EUR",
                     onClick = { vm.currency("EUR") },
-                    label = { Text("EUR (€)", fontWeight = FontWeight.SemiBold) },
+                    label = { Text("EUR (€)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold) },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = Lemon,
                         selectedLabelColor = DarkBackground,
@@ -102,15 +84,6 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                     )
                 )
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = if (s.currency == "EUR") {
-                    if (snapshot.eurPerUsd == null) "Taux EUR indisponible : les valeurs restent en USD."
-                    else "Conversion indicative au taux officiel BCE du ${snapshot.fxDate} (1 USD = ${snapshot.eurPerUsd} EUR)."
-                } else "Montants convertis en USD par Lemon Squeezy à la transaction.",
-                color = TextSecondary,
-                fontSize = 12.sp
-            )
         }
 
         // Test Mode Toggle
@@ -120,11 +93,7 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Mode test", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-                    Spacer(Modifier.height(2.dp))
-                    Text("Afficher les commandes générées en mode bac à sable.", color = TextSecondary, fontSize = 12.sp)
-                }
+                Text("Mode test (bac à sable)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
                 Switch(
                     checked = s.includeTest,
                     onCheckedChange = vm::tests,
@@ -146,44 +115,32 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
         DashboardCard {
             Text("Synchronisation & Cache", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Mise à jour rapide automatique des 30 derniers jours. Rapprochement complet de tout l'historique conseillé toutes les 24h.",
-                color = TextSecondary,
-                fontSize = 12.sp,
-                lineHeight = 17.sp
-            )
-            Spacer(Modifier.height(8.dp))
             DetailRow("Dernière synchronisation", friendlyDateTime(snapshot.fetchedAt))
             DetailRow("Dernier rapprochement complet", friendlyDateTime(snapshot.lastFullSyncAt))
             DetailRow("Commandes en cache", "${snapshot.sales.size} transactions")
             DetailRow("Abonnements en cache", "${snapshot.subscriptions.size} abonnements")
 
-            Spacer(Modifier.height(14.dp))
+            Spacer(Modifier.height(10.dp))
 
             OutlinedButton(
                 onClick = vm::refreshFull,
                 enabled = !s.loading,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
             ) {
-                Icon(Icons.Default.Sync, contentDescription = null, tint = Lemon)
+                Icon(Icons.Default.Sync, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Rapprocher tout l'historique", color = Lemon, fontWeight = FontWeight.Bold)
+                Text("Rapprocher tout l'historique", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
         // Export / Share Summary
         DashboardCard {
             Text("Partage du bilan", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Exportez un récapitulatif synthétique de vos indicateurs clés (revenu net, MRR, commandes) sans aucune donnée personnelle ou confidentielle.",
-                fontSize = 12.sp,
-                color = TextSecondary,
-                lineHeight = 17.sp
-            )
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(10.dp))
             OutlinedButton(
                 onClick = {
                     val mrr = Analytics.mrrEstimateUsdCents(snapshot.subscriptions)
@@ -207,40 +164,37 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                     }
                     context.startActivity(Intent.createChooser(sendIntent, "Partager le bilan"))
                 },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
             ) {
                 Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Partager le récapitulatif", color = Lemon, fontWeight = FontWeight.Bold)
+                Text("Partager le récapitulatif", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
         // SaaS Tools & Accounting Export
         DashboardCard {
-            Text("Outils Vendeur SaaS & Comptabilité", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Simulateur de commissions Lemon Squeezy MoR et export complet de vos transactions au format CSV standard pour votre comptabilité.",
-                fontSize = 12.sp,
-                color = TextSecondary,
-                lineHeight = 17.sp
-            )
-            Spacer(Modifier.height(14.dp))
+            Text("Outils & Comptabilité", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Spacer(Modifier.height(10.dp))
 
             OutlinedButton(
                 onClick = { showFeeCalculator = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
             ) {
                 Icon(Icons.Default.Calculate, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Simulateur de Frais & Marge MoR", color = Lemon, fontWeight = FontWeight.Bold)
+                Text("Simulateur de Frais MoR", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
 
             Button(
                 onClick = {
@@ -266,45 +220,36 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                         Toast.makeText(context, "Erreur lors de l'export CSV : ${e.message}", Toast.LENGTH_LONG).show()
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
             ) {
                 Icon(Icons.Default.FileDownload, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Exporter les transactions en CSV", fontWeight = FontWeight.Bold)
+                Text("Exporter en CSV", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
 
-        // Security & Danger Zone
+        // Security & Disconnect
         DashboardCard {
-            Text("Sécurité & Données locales", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(8.dp))
-            Text("Cache chiffré AES-256-GCM. Capture d'écran et sauvegarde cloud désactivées.", fontSize = 12.sp, color = TextSecondary)
-            Text("Clé API stockée uniquement sur cet appareil.", fontSize = 12.sp, color = TextSecondary)
-
-            TextButton(
-                onClick = { uri.openUri("https://docs.lemonsqueezy.com/api") },
-                modifier = Modifier.padding(vertical = 4.dp)
-            ) {
-                Text("Documentation officielle Lemon Squeezy ↗", color = Lemon)
-            }
-
-            Spacer(Modifier.height(12.dp))
+            Text("Zone de déconnexion", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Spacer(Modifier.height(10.dp))
 
             Button(
                 onClick = { confirm = true },
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = CoralDangerContainer)
             ) {
-                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = CoralDangerLight)
-                Spacer(Modifier.width(9.dp))
-                Text("Effacer la clé et toutes les données", color = CoralDangerLight, fontWeight = FontWeight.Bold)
+                Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Effacer la clé et se déconnecter", color = CoralDangerLight, fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
         }
-
-        ExplanationBanner("Application personnelle et indépendante, non affiliée à Lemon Squeezy. Fonctionnement en lecture seule : aucune modification de commande ou d'abonnement n'est possible.")
     }
 
     if (showFeeCalculator) {
@@ -318,8 +263,8 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
     if (confirm) {
         AlertDialog(
             onDismissRequest = { confirm = false },
-            title = { Text("Effacer toutes les données ?", fontWeight = FontWeight.Bold) },
-            text = { Text("La clé API chiffrée et le cache local seront définitivement supprimés de ce téléphone. Les données sur votre compte Lemon Squeezy restent intactes.") },
+            title = { Text("Se déconnecter ?", fontWeight = FontWeight.Bold) },
+            text = { Text("La clé API et le cache local seront supprimés de cet appareil.") },
             containerColor = DarkSurface,
             titleContentColor = TextPrimary,
             textContentColor = TextSecondary,
@@ -351,26 +296,19 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
 
     DashboardCard {
         Text("Notifications instantanées", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            "Soyez alerté des nouvelles ventes et renouvellements en temps réel.",
-            color = TextSecondary,
-            fontSize = 12.sp
-        )
-
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
 
         if (!PushNotifications.available(context)) {
             Surface(
                 color = CoralDangerContainer.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(18.dp))
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Warning, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Firebase n'est pas configuré dans ce build. La release finale doit inclure votre google-services.json.",
+                        "Firebase non configuré dans ce build.",
                         color = CoralDangerLight,
                         fontSize = 12.sp
                     )
@@ -379,23 +317,24 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
         } else if (s.pushEnabled) {
             Surface(
                 color = MintSuccessContainer.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(10.dp),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(12.dp)) {
+                Column(Modifier.padding(10.dp)) {
                     Text("Alertes instantanées activées", color = MintSuccessLight, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Spacer(Modifier.height(2.dp))
                     Text("Relais : ${s.pushOrigin}", color = TextSecondary, fontSize = 11.sp)
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = vm::disablePush,
                 enabled = !s.pushBusy,
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth().height(42.dp),
+                shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, CoralDanger.copy(alpha = 0.5f))
             ) {
-                Text("Désactiver les alertes", color = CoralDangerLight)
+                Text("Désactiver les alertes", color = CoralDangerLight, fontSize = 13.sp)
             }
         } else {
             OutlinedTextField(
@@ -403,9 +342,9 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
                 onValueChange = { origin = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Adresse HTTPS du relais") },
-                placeholder = { Text("https://mon-worker.workers.dev") },
-                shape = RoundedCornerShape(12.dp)
+                label = { Text("Adresse HTTPS du relais", fontSize = 13.sp) },
+                placeholder = { Text("https://mon-worker.workers.dev", fontSize = 13.sp) },
+                shape = RoundedCornerShape(10.dp)
             )
             Spacer(Modifier.height(8.dp))
             OutlinedTextField(
@@ -413,17 +352,17 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
                 onValueChange = { pairingSecret = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text("Secret d'appairage") },
+                label = { Text("Secret d'appairage", fontSize = 13.sp) },
                 visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
                 trailingIcon = {
                     IconButton(onClick = { reveal = !reveal }) {
                         Icon(
                             if (reveal) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (reveal) "Masquer le secret" else "Afficher le secret"
+                            contentDescription = if (reveal) "Masquer" else "Afficher"
                         )
                     }
                 },
-                shape = RoundedCornerShape(12.dp)
+                shape = RoundedCornerShape(10.dp)
             )
             Spacer(Modifier.height(10.dp))
             Button(
@@ -432,26 +371,22 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
                     else permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 },
                 enabled = !s.pushBusy && origin.isNotBlank() && pairingSecret.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
+                shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
             ) {
-                Text(if (s.pushBusy) "Connexion…" else "Activer les notifications", fontWeight = FontWeight.Bold)
+                Text(if (s.pushBusy) "Connexion…" else "Activer les notifications", fontWeight = FontWeight.Bold, fontSize = 13.sp)
             }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Le secret est chiffré sur cet appareil. Aucune clé API Lemon Squeezy n'est transmise au relais.",
-                color = TextMuted,
-                fontSize = 11.sp
-            )
         }
 
         if (s.pushMessage.isNotBlank()) {
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 text = s.pushMessage,
                 color = if (s.pushEnabled) MintSuccessLight else CoralDangerLight,
-                fontSize = 12.sp,
+                fontSize = 11.sp,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -474,100 +409,85 @@ fun AppUpdateCard(vm: DashboardViewModel, s: UiState) {
                     Icons.Default.SystemUpdate,
                     contentDescription = null,
                     tint = Lemon,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text("Mise à jour de l'app", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
             }
             Surface(
                 color = DarkSurfaceVariant,
-                shape = RoundedCornerShape(8.dp)
+                shape = RoundedCornerShape(6.dp)
             ) {
                 Text(
                     text = "v${BuildConfig.VERSION_NAME}",
                     color = Lemon,
-                    fontSize = 12.sp,
+                    fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                 )
             }
         }
 
-        Spacer(Modifier.height(8.dp))
-        Text(
-            "Vérification et installation automatique des dernières versions publiées sur GitHub.",
-            color = TextSecondary,
-            fontSize = 12.sp,
-            lineHeight = 17.sp
-        )
-
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
         when (val status = s.updateStatus) {
             is UpdateStatus.Idle -> {
                 OutlinedButton(
                     onClick = { vm.checkForUpdate(isManual = true) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Rechercher une mise à jour", color = Lemon, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Sync, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Vérifier les mises à jour", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
             is UpdateStatus.Checking -> {
-                Surface(
-                    color = DarkSurfaceVariant,
-                    shape = RoundedCornerShape(10.dp),
-                    modifier = Modifier.fillMaxWidth()
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Lemon,
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            "Recherche sur GitHub Releases…",
-                            color = TextSecondary,
-                            fontSize = 13.sp
-                        )
-                    }
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Lemon, strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Recherche en cours…", color = TextSecondary, fontSize = 12.sp)
                 }
             }
             is UpdateStatus.UpToDate -> {
                 Surface(
                     color = MintSuccessContainer.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
                             "Votre application est à jour (v${status.latestVersion})",
                             color = MintSuccessLight,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.Medium
                         )
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = { vm.checkForUpdate(isManual = true) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                    shape = RoundedCornerShape(10.dp),
                     border = BorderStroke(1.dp, DarkBorder)
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Sync, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
                     Text("Revérifier", color = TextSecondary, fontSize = 12.sp)
                 }
@@ -575,117 +495,57 @@ fun AppUpdateCard(vm: DashboardViewModel, s: UiState) {
             is UpdateStatus.Available -> {
                 val info = status.info
                 Surface(
-                    color = Lemon.copy(alpha = 0.15f),
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, Lemon.copy(alpha = 0.4f)),
+                    color = LemonContainer.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.NewReleases, contentDescription = null, tint = Lemon, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Version v${info.latestVersion} disponible",
-                                color = Lemon,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.NewReleases, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text("Nouvelle version v${info.latestVersion} disponible !", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            Text(AppUpdateManager.formatFileSize(info.apkSize), color = TextSecondary, fontSize = 11.sp)
                         }
-                        if (info.releaseNotes.isNotBlank()) {
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                text = info.releaseNotes.take(160) + if (info.releaseNotes.length > 160) "…" else "",
-                                color = TextSecondary,
-                                fontSize = 12.sp,
-                                lineHeight = 16.sp
-                            )
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Taille du fichier : ${AppUpdateManager.formatFileSize(info.apkSize)}",
-                            color = TextMuted,
-                            fontSize = 11.sp
-                        )
                     }
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Button(
-                    onClick = { vm.startDownloadUpdate(context, info) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    onClick = {
+                        if (AppUpdateManager.canRequestPackageInstalls(context)) {
+                            vm.startDownloadUpdate(context, info)
+                        } else {
+                            showPermissionDialog = true
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
                 ) {
-                    Icon(Icons.Default.Download, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Télécharger la version v${info.latestVersion}", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Mettre à jour maintenant", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
             is UpdateStatus.Downloading -> {
-                val info = status.info
-                Column(Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            "Téléchargement de la v${info.latestVersion}…",
-                            color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            "${(status.progress * 100).toInt()}%",
-                            color = Lemon,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text("Téléchargement…", fontSize = 12.sp, color = TextPrimary)
+                        Text("${(status.progress * 100).toInt()}%", fontSize = 12.sp, color = Lemon, fontWeight = FontWeight.Bold)
                     }
-                    Spacer(Modifier.height(8.dp))
                     LinearProgressIndicator(
                         progress = { status.progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(8.dp)
-                            .clip(RoundedCornerShape(4.dp)),
+                        modifier = Modifier.fillMaxWidth().height(6.dp),
                         color = Lemon,
                         trackColor = DarkSurfaceVariant
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        "${AppUpdateManager.formatFileSize(status.downloadedBytes)} / ${AppUpdateManager.formatFileSize(status.totalBytes)}",
-                        color = TextMuted,
-                        fontSize = 11.sp
                     )
                 }
             }
             is UpdateStatus.ReadyToInstall -> {
-                Surface(
-                    color = MintSuccessContainer.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(10.dp),
-                    border = BorderStroke(1.dp, MintSuccess.copy(alpha = 0.4f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(Modifier.padding(12.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Mise à jour v${status.info.latestVersion} prête",
-                                color = MintSuccessLight,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp
-                            )
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Le fichier d'installation est téléchargé. Appuyez pour lancer l'installation.",
-                            color = TextSecondary,
-                            fontSize = 12.sp
-                        )
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
                 Button(
                     onClick = {
                         if (AppUpdateManager.canRequestPackageInstalls(context)) {
@@ -694,69 +554,71 @@ fun AppUpdateCard(vm: DashboardViewModel, s: UiState) {
                             showPermissionDialog = true
                         }
                     },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
                 ) {
-                    Icon(Icons.Default.InstallMobile, contentDescription = null, tint = DarkBackground, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Installer maintenant", fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.InstallMobile, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Installer la mise à jour", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 }
             }
             is UpdateStatus.Error -> {
                 Surface(
                     color = CoralDangerContainer.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(18.dp))
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(status.message, color = CoralDangerLight, fontSize = 12.sp)
+                        Text(status.message, color = CoralDangerLight, fontSize = 11.sp, modifier = Modifier.weight(1f))
                     }
                 }
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = { vm.checkForUpdate(isManual = true) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, CoralDanger.copy(alpha = 0.5f))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(42.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
                 ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, tint = CoralDangerLight, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Default.Sync, contentDescription = null, tint = Lemon, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Réessayer", color = CoralDangerLight, fontSize = 12.sp)
+                    Text("Réessayer", color = Lemon, fontSize = 12.sp)
                 }
             }
         }
-    }
 
-    if (showPermissionDialog) {
-        AlertDialog(
-            onDismissRequest = { showPermissionDialog = false },
-            title = { Text("Autorisation requise", fontWeight = FontWeight.Bold) },
-            text = {
-                Text("Android nécessite que vous autorisiez Lemon Dashboard à installer des applications. Cliquez sur « Ouvrir les paramètres » et activez « Autoriser cette source ».")
-            },
-            containerColor = DarkSurface,
-            titleContentColor = TextPrimary,
-            textContentColor = TextSecondary,
-            confirmButton = {
-                Button(
-                    onClick = {
-                        showPermissionDialog = false
-                        context.startActivity(AppUpdateManager.createInstallPermissionIntent(context))
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
-                ) {
-                    Text("Ouvrir les paramètres", fontWeight = FontWeight.Bold)
+        if (showPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showPermissionDialog = false },
+                title = { Text("Autorisation requise", fontWeight = FontWeight.Bold) },
+                text = { Text("Pour mettre à jour automatiquement l'application, Android nécessite l'autorisation d'installer des packages inconnus.") },
+                containerColor = DarkSurface,
+                titleContentColor = TextPrimary,
+                textContentColor = TextSecondary,
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showPermissionDialog = false
+                            context.startActivity(AppUpdateManager.createInstallPermissionIntent(context))
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("Ouvrir les paramètres", fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPermissionDialog = false }) {
+                        Text("Annuler", color = TextSecondary)
+                    }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPermissionDialog = false }) {
-                    Text("Annuler", color = TextSecondary)
-                }
-            }
-        )
+            )
+        }
     }
 }
-

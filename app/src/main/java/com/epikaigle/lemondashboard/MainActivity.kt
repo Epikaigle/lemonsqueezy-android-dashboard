@@ -289,14 +289,14 @@ private fun Header(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(start = 20.dp, end = 12.dp, top = 10.dp, bottom = 8.dp),
+                .padding(start = 16.dp, end = 10.dp, top = 8.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Lemon Squircle App Icon
             Box(
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Lemon),
                 contentAlignment = Alignment.Center
             ) {
@@ -304,17 +304,17 @@ private fun Header(
                     imageVector = Icons.Default.Bolt,
                     contentDescription = null,
                     tint = DarkBackground,
-                    modifier = Modifier.size(24.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
 
             Column(Modifier.weight(1f)) {
                 Text(
                     text = "Lemon Dashboard",
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 17.sp,
                     color = TextPrimary
                 )
                 Text(

@@ -52,7 +52,7 @@ import java.util.Locale
 @Composable
 fun DashboardCard(
     modifier: Modifier = Modifier,
-    shape: RoundedCornerShape = RoundedCornerShape(20.dp),
+    shape: RoundedCornerShape = RoundedCornerShape(16.dp),
     backgroundColor: Color = DarkSurface,
     borderColor: Color = DarkBorder,
     content: @Composable ColumnScope.() -> Unit
@@ -66,7 +66,7 @@ fun DashboardCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(18.dp),
+                .padding(14.dp),
             content = content
         )
     }
@@ -83,11 +83,11 @@ fun StatCard(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = BorderStroke(1.dp, DarkBorder)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -104,7 +104,7 @@ fun StatCard(
                 )
                 Box(
                     modifier = Modifier
-                        .size(30.dp)
+                        .size(28.dp)
                         .clip(RoundedCornerShape(8.dp))
                         .background(iconTint.copy(alpha = 0.14f)),
                     contentAlignment = Alignment.Center
@@ -113,21 +113,21 @@ fun StatCard(
                         imageVector = icon,
                         contentDescription = null,
                         tint = iconTint,
-                        modifier = Modifier.size(16.dp)
+                        modifier = Modifier.size(15.dp)
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = value,
-                fontSize = 20.sp,
+                fontSize = 19.sp,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (!subtitle.isNullOrBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(
                     text = subtitle,
                     fontSize = 11.sp,
@@ -141,7 +141,7 @@ fun StatCard(
 }
 
 @Composable
-fun TrendBadge(rate: Double?, label: String = "vs période précédente") {
+fun TrendBadge(rate: Double?, label: String? = null) {
     if (rate == null) return
     val isPositive = rate > 0
     val isZero = rate == 0.0
@@ -160,10 +160,11 @@ fun TrendBadge(rate: Double?, label: String = "vs période précédente") {
         isZero -> Icons.AutoMirrored.Filled.TrendingFlat
         else -> Icons.AutoMirrored.Filled.TrendingDown
     }
-    val text = when {
+    val rateText = when {
         isZero -> "Stable"
         else -> "${if (isPositive) "+" else ""}${"%.1f".format(Locale.FRANCE, rate)} %"
     }
+    val displayText = if (label != null) "$rateText $label" else rateText
 
     Surface(
         color = containerColor,
@@ -171,13 +172,13 @@ fun TrendBadge(rate: Double?, label: String = "vs période précédente") {
         border = BorderStroke(1.dp, contentColor.copy(alpha = 0.25f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(5.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(14.dp))
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(13.dp))
             Text(
-                text = "$text $label",
+                text = displayText,
                 color = contentColor,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold
@@ -236,20 +237,12 @@ fun InteractiveChartCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "Évolution des revenus",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 17.sp,
-                    color = TextPrimary
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    text = if (hasData) "Touchez une barre pour inspecter le montant" else "Aucune transaction enregistrée",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
-            }
+            Text(
+                text = "Évolution des revenus",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = TextPrimary
+            )
             if (selectedIndex != null) {
                 IconButton(
                     onClick = { selectedIndex = null },
@@ -1075,14 +1068,6 @@ fun MerchantHealthCard(refundRate: Double) {
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = if (refundRate > 2.0) "Lemon Squeezy surveille les comptes avec un taux de remboursement supérieur à 2%."
-            else "Votre taux de remboursement est conforme aux standards Lemon Squeezy pour éviter les réserves de risques.",
-            fontSize = 11.sp,
-            color = TextMuted,
-            lineHeight = 15.sp
-        )
     }
 }
 
@@ -1211,20 +1196,13 @@ fun FeeCalculatorDialog(
         textContentColor = TextSecondary,
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Calculate, contentDescription = null, tint = Lemon, modifier = Modifier.size(24.dp))
-                Spacer(Modifier.width(10.dp))
-                Text("Calculateur de Marge Lemon Squeezy", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Icon(Icons.Default.Calculate, contentDescription = null, tint = Lemon, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Calculateur de frais MoR", fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text(
-                    "Simulez vos gains réels après prélèvement des frais Lemon Squeezy (5% + 0,50$ + 1,5% si international/PayPal).",
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    lineHeight = 17.sp
-                )
-
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = priceInput,
                     onValueChange = { input ->
