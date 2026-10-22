@@ -59,7 +59,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         includeTest = secure.showTests(),
         currency = secure.currency(),
         pushEnabled = secure.readPushConfig() != null,
-        pushOrigin = secure.readPushConfig()?.origin.orEmpty()
+        pushOrigin = secure.readPushConfig()?.origin ?: PushNotifications.DEFAULT_ORIGIN
     ))
         private set
 
@@ -183,7 +183,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun tab(value: Int) { state = state.copy(tab = value) }
     fun clearError() { state = state.copy(error = null) }
 
-    fun enablePush(origin: String, secret: String) {
+    fun enablePush(origin: String = PushNotifications.DEFAULT_ORIGIN, secret: String = PushNotifications.DEFAULT_SECRET) {
         if (state.pushBusy) return
         val expected = generation
         state = state.copy(pushBusy = true, pushMessage = "")

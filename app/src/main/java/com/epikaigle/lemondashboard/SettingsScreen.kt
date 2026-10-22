@@ -285,9 +285,11 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
 @Composable
 fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
     val context = LocalContext.current
-    var origin by remember { mutableStateOf(s.pushOrigin) }
-    var pairingSecret by remember { mutableStateOf("") }
+    var showAdvanced by remember { mutableStateOf(false) }
+    var origin by remember { mutableStateOf(s.pushOrigin.ifBlank { PushNotifications.DEFAULT_ORIGIN }) }
+    var pairingSecret by remember { mutableStateOf(PushNotifications.DEFAULT_SECRET) }
     var reveal by remember { mutableStateOf(false) }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -295,8 +297,38 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
     }
 
     DashboardCard {
-        Text("Notifications instantanées", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.NotificationsActive,
+                    contentDescription = null,
+                    tint = Lemon,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Notifications instantanées", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            }
+            if (s.pushEnabled) {
+                Surface(
+                    color = MintSuccessContainer.copy(alpha = 0.4f),
+                    shape = RoundedCornerShape(100.dp)
+                ) {
+                    Text(
+                        "Activées",
+                        color = MintSuccessLight,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
 
         if (!PushNotifications.available(context)) {
             Surface(
@@ -316,68 +348,62 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
             }
         } else if (s.pushEnabled) {
             Surface(
-                color = MintSuccessContainer.copy(alpha = 0.3f),
+                color = MintSuccessContainer.copy(alpha = 0.2f),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.padding(10.dp)) {
-                    Text("Alertes instantanées activées", color = MintSuccessLight, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Spacer(Modifier.height(2.dp))
-                    Text("Relais : ${s.pushOrigin}", color = TextSecondary, fontSize = 11.sp)
+                Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Alertes en direct actives à chaque vente ou abonnement.",
+                        color = MintSuccessLight,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = vm::disablePush,
                 enabled = !s.pushBusy,
-                modifier = Modifier.fillMaxWidth().height(42.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(44.dp),
                 shape = RoundedCornerShape(10.dp),
                 border = BorderStroke(1.dp, CoralDanger.copy(alpha = 0.5f))
             ) {
-                Text("Désactiver les alertes", color = CoralDangerLight, fontSize = 13.sp)
+                Text("Désactiver les alertes", color = CoralDangerLight, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
         } else {
-            OutlinedTextField(
-                value = origin,
-                onValueChange = { origin = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Adresse HTTPS du relais", fontSize = 13.sp) },
-                placeholder = { Text("https://mon-worker.workers.dev", fontSize = 13.sp) },
-                shape = RoundedCornerShape(10.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = pairingSecret,
-                onValueChange = { pairingSecret = it },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                label = { Text("Secret d'appairage", fontSize = 13.sp) },
-                visualTransformation = if (reveal) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { reveal = !reveal }) {
-                        Icon(
-                            if (reveal) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (reveal) "Masquer" else "Afficher"
-                        )
-                    }
-                },
-                shape = RoundedCornerShape(10.dp)
+            Text(
+                "Soyez alerté en direct avec le montant et le produit dès qu'une vente a lieu.",
+                color = TextSecondary,
+                fontSize = 12.sp
             )
             Spacer(Modifier.height(10.dp))
             Button(
                 onClick = {
-                    if (PushNotifications.permissionGranted(context)) vm.enablePush(origin, pairingSecret)
-                    else permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    if (PushNotifications.permissionGranted(context)) {
+                        vm.enablePush(origin, pairingSecret)
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
                 },
-                enabled = !s.pushBusy && origin.isNotBlank() && pairingSecret.isNotBlank(),
+                enabled = !s.pushBusy,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(44.dp),
                 shape = RoundedCornerShape(10.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
             ) {
-                Text(if (s.pushBusy) "Connexion…" else "Activer les notifications", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Icon(Icons.Default.Notifications, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    if (s.pushBusy) "Connexion…" else "Activer les notifications",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
             }
         }
 

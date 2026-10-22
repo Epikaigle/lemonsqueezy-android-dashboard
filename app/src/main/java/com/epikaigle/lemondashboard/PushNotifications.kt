@@ -33,6 +33,8 @@ import kotlin.coroutines.resumeWithException
 data class PushConfig(val origin: String, val secret: String)
 
 object PushNotifications {
+    const val DEFAULT_ORIGIN = "https://lemon-dashboard-push.epikaigle444.workers.dev"
+    const val DEFAULT_SECRET = "3d3cc1ac176fc446bbe3ad3ac8a9ee9da6b181603e4b7d0d"
     const val CHANNEL_ID = "lemon_sales"
     private val network = OkHttpClient.Builder()
         .followRedirects(false).followSslRedirects(false)
