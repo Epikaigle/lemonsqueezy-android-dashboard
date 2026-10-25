@@ -105,8 +105,13 @@ class SecureStore(context: Context) {
 
     fun storeId(): String = prefs.getString("store_id", "") ?: ""
     fun saveStoreId(value: String) { prefs.edit().putString("store_id", value).apply() }
-    fun showTests(): Boolean = prefs.getBoolean("show_test", false)
-    fun saveShowTests(value: Boolean) { prefs.edit().putBoolean("show_test", value).apply() }
+    fun period(): Period = prefs.getString("selected_period", null)
+        ?.let { runCatching { Period.valueOf(it) }.getOrNull() } ?: Period.MONTH
+    fun savePeriod(value: Period) {
+        check(prefs.edit().putString("selected_period", value.name).commit()) {
+            "Impossible d'enregistrer la période"
+        }
+    }
     fun currency(): String = prefs.getString("currency", "USD") ?: "USD"
     fun saveCurrency(value: String) { prefs.edit().putString("currency", value).apply() }
 

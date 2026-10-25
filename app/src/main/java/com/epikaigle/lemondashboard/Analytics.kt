@@ -30,11 +30,11 @@ object Analytics {
         try { LocalDate.parse(iso.take(10)) } catch (_: Exception) { null }
     }
 
-    fun selectedSales(snapshot: Snapshot, storeId: String, includeTest: Boolean): List<Sale> =
-        snapshot.sales.filter { (storeId.isEmpty() || it.storeId == storeId) && (includeTest || !it.testMode) }
+    fun selectedSales(snapshot: Snapshot, storeId: String): List<Sale> =
+        snapshot.sales.filter { (storeId.isEmpty() || it.storeId == storeId) && !it.testMode }
 
-    fun selectedSubscriptions(snapshot: Snapshot, storeId: String, includeTest: Boolean): List<Subscription> =
-        snapshot.subscriptions.filter { (storeId.isEmpty() || it.storeId == storeId) && (includeTest || !it.testMode) }
+    fun selectedSubscriptions(snapshot: Snapshot, storeId: String): List<Subscription> =
+        snapshot.subscriptions.filter { (storeId.isEmpty() || it.storeId == storeId) && !it.testMode }
 
     fun selectedLicenseKeys(snapshot: Snapshot, storeId: String): List<LicenseKey> =
         snapshot.licenseKeys.filter { storeId.isEmpty() || it.storeId == storeId }

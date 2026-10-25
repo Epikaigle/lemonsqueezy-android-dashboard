@@ -198,11 +198,11 @@ private fun LemonApp(vm: DashboardViewModel) {
                         disconnect = vm::disconnect
                     )
                 } else {
-                    val filteredSales = remember(snapshot, s.selectedStore, s.includeTest) {
-                        Analytics.selectedSales(snapshot, s.selectedStore, s.includeTest)
+                    val filteredSales = remember(snapshot, s.selectedStore) {
+                        Analytics.selectedSales(snapshot, s.selectedStore)
                     }
-                    val filteredSubs = remember(snapshot, s.selectedStore, s.includeTest) {
-                        Analytics.selectedSubscriptions(snapshot, s.selectedStore, s.includeTest)
+                    val filteredSubs = remember(snapshot, s.selectedStore) {
+                        Analytics.selectedSubscriptions(snapshot, s.selectedStore)
                     }
                     Box(modifier = Modifier.fillMaxSize()) {
                         when (s.tab) {

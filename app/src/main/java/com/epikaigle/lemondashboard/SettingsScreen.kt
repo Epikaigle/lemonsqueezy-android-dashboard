@@ -86,25 +86,6 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
             }
         }
 
-        // Test Mode Toggle
-        DashboardCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Mode test (bac à sable)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-                Switch(
-                    checked = s.includeTest,
-                    onCheckedChange = vm::tests,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = DarkBackground,
-                        checkedTrackColor = Lemon
-                    )
-                )
-            }
-        }
-
         // Push Notifications
         PushSettingsCard(vm, s)
 

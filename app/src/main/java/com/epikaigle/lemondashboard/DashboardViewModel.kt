@@ -33,7 +33,6 @@ data class UiState(
     val error: String? = null,
     val snapshot: Snapshot? = null,
     val selectedStore: String = "",
-    val includeTest: Boolean = false,
     val currency: String = "USD",
     val period: Period = Period.MONTH,
     val tab: Int = 0,
@@ -56,8 +55,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         connected = secure.readToken() != null,
         initializing = secure.readToken() != null,
         selectedStore = secure.storeId(),
-        includeTest = secure.showTests(),
         currency = secure.currency(),
+        period = secure.period(),
         pushEnabled = secure.readPushConfig() != null,
         pushOrigin = secure.readPushConfig()?.origin ?: PushNotifications.DEFAULT_ORIGIN
     ))
@@ -177,9 +176,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         if (eurPerUsd != null) this else copy(eurPerUsd = previous?.eurPerUsd, fxDate = previous?.fxDate ?: "")
 
     fun store(id: String) { secure.saveStoreId(id); state = state.copy(selectedStore = id) }
-    fun tests(show: Boolean) { secure.saveShowTests(show); state = state.copy(includeTest = show) }
     fun currency(value: String) { secure.saveCurrency(value); state = state.copy(currency = value) }
-    fun period(value: Period) { state = state.copy(period = value) }
+    fun period(value: Period) { secure.savePeriod(value); state = state.copy(period = value) }
     fun tab(value: Int) { state = state.copy(tab = value) }
     fun clearError() { state = state.copy(error = null) }
 

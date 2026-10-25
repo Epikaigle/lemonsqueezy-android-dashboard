@@ -33,8 +33,7 @@ class AnalyticsTest {
     @Test fun excludesTestByDefault() {
         val data = Snapshot(emptyList(), listOf(sale("real", 100), sale("test", 500, test = true)),
             emptyList(), "2026-10-16T00:00:00Z")
-        assertEquals(1, Analytics.selectedSales(data, "", false).size)
-        assertEquals(2, Analytics.selectedSales(data, "", true).size)
+        assertEquals(1, Analytics.selectedSales(data, "").size)
     }
 
     @Test fun allPeriodHasYearlyBuckets() {
