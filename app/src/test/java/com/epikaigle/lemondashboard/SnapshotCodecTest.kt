@@ -8,7 +8,8 @@ class SnapshotCodecTest {
         val snapshot = Snapshot(
             listOf(Store("7", "Ma boutique")),
             listOf(Sale("order:1", "7", "Commande", "Produit", "paid", "EUR",
-                1000, 100, 1090, 109, "2026-10-16T09:00:00Z", false)),
+                1000, 100, 1090, 109, "2026-10-16T09:00:00Z", false,
+                taxUsdCents = 180, taxName = "VAT", taxRate = 20.0, taxInclusive = true)),
             listOf(Subscription("sub:1", "7", "Produit", "Mensuel", "active",
                 "2026-11-16T00:00:00Z", "", false, 1090L)),
             "2026-10-16T20:00:00Z", 0.92, "2026-10-16", "2026-10-16T20:00:00Z",
@@ -45,10 +46,16 @@ class SnapshotCodecTest {
         val oldJson = org.json.JSONObject(SnapshotCodec.encode(snapshot))
         oldJson.remove("lastFullSyncAt")
         oldJson.remove("licenseKeys")
-        oldJson.getJSONArray("sales").getJSONObject(0).remove("refundedAt")
+        oldJson.getJSONArray("sales").getJSONObject(0).apply {
+            remove("refundedAt")
+            listOf("subtotalCents", "discountCents", "taxCents", "subtotalUsdCents",
+                "discountUsdCents", "taxUsdCents", "taxName", "taxRate", "taxInclusive")
+                .forEach { remove(it) }
+        }
         val restored = SnapshotCodec.decode(oldJson.toString())
         assertEquals("", restored.lastFullSyncAt)
         assertEquals("", restored.sales.first().refundedAt)
+        assertNull(restored.sales.first().taxUsdCents)
         assertTrue(restored.licenseKeys.isEmpty())
     }
 }

@@ -12,6 +12,12 @@ internal object LemonMapper {
     private fun JSONObject.idValue(key: String): String =
         if (isNull(key)) "" else opt(key)?.toString() ?: ""
 
+    private fun JSONObject.optionalCents(key: String): Long? =
+        if (has(key) && !isNull(key)) getLong(key) else null
+
+    private fun JSONObject.taxInclusiveOrNull(): Boolean? =
+        if (has("tax_inclusive") && !isNull("tax_inclusive")) getBoolean("tax_inclusive") else null
+
     fun orders(rows: List<JSONObject>): List<Sale> = rows.map { record ->
         val a = record.attributes()
         Sale(
@@ -28,7 +34,16 @@ internal object LemonMapper {
             usdRefundCents = a.getLong("refunded_amount_usd"),
             createdAt = a.getString("created_at"),
             testMode = a.getBoolean("test_mode"),
-            refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at")
+            refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at"),
+            subtotalCents = a.optionalCents("subtotal"),
+            discountCents = a.optionalCents("discount_total"),
+            taxCents = a.optionalCents("tax"),
+            subtotalUsdCents = a.optionalCents("subtotal_usd"),
+            discountUsdCents = a.optionalCents("discount_total_usd"),
+            taxUsdCents = a.optionalCents("tax_usd"),
+            taxName = a.optString("tax_name", ""),
+            taxRate = a.optString("tax_rate", "").toDoubleOrNull(),
+            taxInclusive = a.taxInclusiveOrNull()
         )
     }
 
@@ -58,7 +73,16 @@ internal object LemonMapper {
                 createdAt = a.getString("created_at"),
                 testMode = a.getBoolean("test_mode"),
                 subscriptionId = subscriptionId,
-                refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at")
+                refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at"),
+            subtotalCents = a.optionalCents("subtotal"),
+            discountCents = a.optionalCents("discount_total"),
+            taxCents = a.optionalCents("tax"),
+            subtotalUsdCents = a.optionalCents("subtotal_usd"),
+            discountUsdCents = a.optionalCents("discount_total_usd"),
+            taxUsdCents = a.optionalCents("tax_usd"),
+            taxName = a.optString("tax_name", ""),
+            taxRate = a.optString("tax_rate", "").toDoubleOrNull(),
+            taxInclusive = a.taxInclusiveOrNull()
             )
         }
     }

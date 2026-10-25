@@ -17,6 +17,23 @@ class LemonMapperTest {
         return JSONObject().put("id", id).put("attributes", a)
     }
 
+    @Test fun mapsTaxAndDiscountWithoutInventingFees() {
+        val record = row("financial", mapOf(
+            "subtotal" to 2000, "subtotal_usd" to 2000,
+            "discount_total" to 100, "discount_total_usd" to 100,
+            "tax" to 380, "tax_usd" to 380,
+            "tax_name" to "VAT", "tax_rate" to "20.00",
+            "tax_inclusive" to false
+        ))
+        val sale = LemonMapper.orders(listOf(record)).single()
+        assertEquals(380L, sale.taxUsdCents)
+        assertEquals(100L, sale.discountUsdCents)
+        assertEquals("VAT", sale.taxName)
+        assertEquals(20.0, sale.taxRate!!, 0.001)
+        assertEquals(false, sale.taxInclusive)
+        assertNull(LemonMapper.orders(listOf(row("old"))).single().taxUsdCents)
+    }
+
     @Test fun initialInvoiceIsNotAddedTwice() {
         val order = row("1", mapOf("first_order_item" to JSONObject().put("product_name", "App")))
         val initial = row("2", mapOf("billing_reason" to "initial"))

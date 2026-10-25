@@ -18,7 +18,16 @@ data class Sale(
     val createdAt: String,
     val testMode: Boolean,
     val subscriptionId: String = "",
-    val refundedAt: String = ""
+    val refundedAt: String = "",
+    val subtotalCents: Long? = null,
+    val discountCents: Long? = null,
+    val taxCents: Long? = null,
+    val subtotalUsdCents: Long? = null,
+    val discountUsdCents: Long? = null,
+    val taxUsdCents: Long? = null,
+    val taxName: String = "",
+    val taxRate: Double? = null,
+    val taxInclusive: Boolean? = null
 ) {
     val paid: Boolean get() = status in setOf("paid", "refunded", "partial_refund")
     val netUsd: Long get() = if (paid) (usdCents - usdRefundCents).coerceAtLeast(0) else 0
@@ -88,6 +97,15 @@ object SnapshotCodec {
                     put("createdAt", s.createdAt); put("testMode", s.testMode)
                     put("subscriptionId", s.subscriptionId)
                     put("refundedAt", s.refundedAt)
+                    put("subtotalCents", s.subtotalCents ?: JSONObject.NULL)
+                    put("discountCents", s.discountCents ?: JSONObject.NULL)
+                    put("taxCents", s.taxCents ?: JSONObject.NULL)
+                    put("subtotalUsdCents", s.subtotalUsdCents ?: JSONObject.NULL)
+                    put("discountUsdCents", s.discountUsdCents ?: JSONObject.NULL)
+                    put("taxUsdCents", s.taxUsdCents ?: JSONObject.NULL)
+                    put("taxName", s.taxName)
+                    put("taxRate", s.taxRate ?: JSONObject.NULL)
+                    put("taxInclusive", s.taxInclusive ?: JSONObject.NULL)
                 })
             }
         })
@@ -137,7 +155,16 @@ object SnapshotCodec {
                 usdCents = it.getLong("usdCents"), usdRefundCents = it.getLong("usdRefundCents"),
                 createdAt = it.getString("createdAt"), testMode = it.getBoolean("testMode"),
                 subscriptionId = it.optString("subscriptionId"),
-                refundedAt = it.optString("refundedAt")
+                refundedAt = it.optString("refundedAt"),
+                subtotalCents = it.optionalLong("subtotalCents"),
+                discountCents = it.optionalLong("discountCents"),
+                taxCents = it.optionalLong("taxCents"),
+                subtotalUsdCents = it.optionalLong("subtotalUsdCents"),
+                discountUsdCents = it.optionalLong("discountUsdCents"),
+                taxUsdCents = it.optionalLong("taxUsdCents"),
+                taxName = it.optString("taxName", ""),
+                taxRate = if (it.has("taxRate") && !it.isNull("taxRate")) it.getDouble("taxRate") else null,
+                taxInclusive = if (it.has("taxInclusive") && !it.isNull("taxInclusive")) it.getBoolean("taxInclusive") else null
             )
         }
         val subscriptions = root.getJSONArray("subscriptions").objects().map {
@@ -177,6 +204,9 @@ object SnapshotCodec {
             root.optString("fxDate"), root.optString("lastFullSyncAt"),
             licenseKeys)
     }
+
+    private fun JSONObject.optionalLong(key: String): Long? =
+        if (has(key) && !isNull(key)) getLong(key) else null
 
     private fun JSONArray.objects(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 }
