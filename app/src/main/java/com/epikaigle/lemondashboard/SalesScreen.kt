@@ -71,6 +71,29 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
         item { StoreChips(snapshot, s.selectedStore, vm::store) }
         item { PeriodChips(s.period, vm::period) }
 
+        item {
+            val paid = inPeriod.filter { it.paid }
+            val knownTaxes = paid.mapNotNull { it.taxUsdCents }
+            val fees = paid.mapNotNull(Analytics::estimatedPlatformFeeUsdCents)
+            val projected = paid.mapNotNull(Analytics::estimatedAfterTaxesAndFeesUsdCents)
+            DashboardCard {
+                Text("Détail financier de la période", fontWeight = FontWeight.Bold, color = TextPrimary)
+                Spacer(Modifier.height(8.dp))
+                DetailRow("Total facturé", Analytics.money(paid.sumOf { it.usdCents }, s.currency, snapshot.eurPerUsd))
+                DetailRow("TVA / taxes initiales (" + knownTaxes.size + "/" + paid.size + " connues)",
+                    Analytics.money(knownTaxes.sum(), s.currency, snapshot.eurPerUsd))
+                DetailRow("Frais plateforme de base estimés",
+                    "≈ " + Analytics.money(fees.sum(), s.currency, snapshot.eurPerUsd))
+                if (projected.isNotEmpty()) {
+                    DetailRow("Après TVA/frais, sans remboursement (" + projected.size + " ventes)",
+                        "≈ " + Analytics.money(projected.sum(), s.currency, snapshot.eurPerUsd),
+                        isBold = true)
+                }
+                Text("Estimations indicatives, hors frais supplémentaires et ajustements de remboursement non accessibles via l’API.",
+                    fontSize = 11.sp, color = TextMuted)
+            }
+        }
+
         // Search Bar
         item {
             OutlinedTextField(
@@ -297,6 +320,11 @@ fun SaleItemCard(
                         color = TextSecondary,
                         fontSize = 11.sp
                     )
+                }
+                Analytics.estimatedAfterTaxesAndFeesUsdCents(sale)?.let { projected ->
+                    Spacer(Modifier.height(2.dp))
+                    Text("≈ " + Analytics.money(projected, currency, snapshot.eurPerUsd) + " après TVA/frais",
+                        fontSize = 10.sp, color = MintSuccessLight)
                 }
             }
         }

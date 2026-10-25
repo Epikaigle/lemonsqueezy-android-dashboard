@@ -488,7 +488,26 @@ fun TransactionDetailSheet(
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
                 Text("Détail financier", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
                 Spacer(Modifier.height(10.dp))
-                DetailRow("Montant brut", Analytics.money(sale.usdCents, currency, snapshot.eurPerUsd))
+                sale.subtotalUsdCents?.let {
+                    DetailRow("Sous-total", Analytics.money(it, currency, snapshot.eurPerUsd))
+                }
+                sale.discountUsdCents?.takeIf { it > 0L }?.let {
+                    DetailRow("Remise", "- " + Analytics.money(it, currency, snapshot.eurPerUsd))
+                }
+                DetailRow("Total facturé (TTC)", Analytics.money(sale.usdCents, currency, snapshot.eurPerUsd))
+                if (sale.taxUsdCents != null) {
+                    val label = sale.taxName.ifBlank { "TVA / taxes" }
+                    val rate = sale.taxRate?.let { " (" + it + " %)" } ?: ""
+                    DetailRow(label + rate, Analytics.money(sale.taxUsdCents, currency, snapshot.eurPerUsd),
+                        valueColor = TextSecondary)
+                    sale.taxInclusive?.let { included ->
+                        DetailRow("Taxe dans le prix", if (included) "Incluse" else "Ajoutée",
+                            valueColor = TextMuted)
+                    }
+                } else {
+                    Text("Détail de TVA indisponible dans le cache. Actualiser les données.",
+                        fontSize = 11.sp, color = TextMuted)
+                }
                 if (sale.usdRefundCents > 0L) {
                     DetailRow(
                         "Remboursement",
@@ -501,13 +520,32 @@ fun TransactionDetailSheet(
                 }
                 HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 8.dp))
                 DetailRow(
-                    "Total net",
+                    "Après remboursements (avant TVA et frais)",
                     Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd),
                     isBold = true,
                     valueColor = if (sale.paid) MintSuccessLight else TextMuted
                 )
+                Analytics.estimatedPlatformFeeUsdCents(sale)?.let { fee ->
+                    DetailRow("Frais Lemon Squeezy (base estimée)",
+                        "- " + Analytics.money(fee, currency, snapshot.eurPerUsd),
+                        valueColor = TextSecondary)
+                }
+                Analytics.estimatedAfterTaxesAndFeesUsdCents(sale)?.let { projected ->
+                    HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 8.dp))
+                    DetailRow("Après TVA et frais (estimé)",
+                        "≈ " + Analytics.money(projected, currency, snapshot.eurPerUsd),
+                        isBold = true, valueColor = MintSuccessLight)
+                }
+                if (sale.paid) {
+                    Text(
+                        if (sale.usdRefundCents > 0L)
+                            "Revenu après taxes et frais non estimé : les ajustements liés aux remboursements sont inconnus."
+                        else "Frais indicatifs : 5 % + 0,50 $ (et +0,5 % pour les renouvellements). Suppléments internationaux, PayPal, affiliés et frais de versement non connus. L’API ne donne pas les frais réels.",
+                        fontSize = 11.sp, color = TextMuted
+                    )
+                }
                 DetailRow(
-                    "Montant d'origine",
+                    "Montant d'origine (après remboursements)",
                     Analytics.localMoney(originalNet, sale.currency),
                     valueColor = TextSecondary
                 )
@@ -535,7 +573,7 @@ fun TransactionDetailSheet(
                         appendLine("• Produit : ${sale.product}")
                         appendLine("• Référence : #${sale.id}")
                         appendLine("• Date : ${friendlyDateTime(sale.createdAt)}")
-                        appendLine("• Montant net : ${Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd)}")
+                        appendLine("• Montant après remboursements, avant TVA et frais : ${Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd)}")
                         appendLine("• Statut : ${sale.status}")
                     }
                     val intent = Intent(Intent.ACTION_SEND).apply {

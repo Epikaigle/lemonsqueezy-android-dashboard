@@ -132,7 +132,7 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                     val summaryText = buildString {
                         appendLine("📊 Lemon Squeezy — Bilan d'activité")
                         appendLine("• Boutiques synchronisées : $storeNames")
-                        appendLine("• Revenu net cumulé : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
+                        appendLine("• Total après remboursements (avant TVA et frais) : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
                         appendLine("• Transactions payées : ${paidSales.size}")
                         appendLine("• Abonnements actifs : $activeSubs")
                         appendLine("• MRR estimé : ${Analytics.money(mrr, s.currency, snapshot.eurPerUsd)}")

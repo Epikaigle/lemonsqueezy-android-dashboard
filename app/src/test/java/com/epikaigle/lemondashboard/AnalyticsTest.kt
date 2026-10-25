@@ -36,6 +36,16 @@ class AnalyticsTest {
         assertEquals(1, Analytics.selectedSales(data, "").size)
     }
 
+    @Test fun estimatedFeesDoNotMisrepresentRefundsOrMissingTaxes() {
+        val standard = sale("standard", 2000).copy(taxUsdCents = 400)
+        assertEquals(150L, Analytics.estimatedPlatformFeeUsdCents(standard))
+        assertEquals(1450L, Analytics.estimatedAfterTaxesAndFeesUsdCents(standard))
+        assertNull(Analytics.estimatedAfterTaxesAndFeesUsdCents(standard.copy(taxUsdCents = null)))
+        assertNull(Analytics.estimatedAfterTaxesAndFeesUsdCents(standard.copy(usdRefundCents = 200)))
+        assertNull(Analytics.estimatedPlatformFeeUsdCents(standard.copy(status = "pending")))
+        assertEquals(160L, Analytics.estimatedPlatformFeeUsdCents(standard.copy(source = "Renouvellement")))
+    }
+
     @Test fun allPeriodHasYearlyBuckets() {
         val buckets = Analytics.graphBuckets(
             listOf(sale("old", 100, at = "2025-10-16T12:00:00Z"), sale("now", 200)),

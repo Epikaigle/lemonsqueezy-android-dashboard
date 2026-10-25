@@ -326,6 +326,25 @@ object Analytics {
             .sortedBy { it.daysRemaining }
     }
 
+    /**
+     * Indicative platform fee only: JSON:API does not disclose actual fee amounts.
+     * Geography, PayPal, affiliate, custom plan and payout fees are not inferred.
+     */
+    fun estimatedPlatformFeeUsdCents(sale: Sale): Long? {
+        if (!sale.paid || sale.usdCents <= 0L) return null
+        val percent = if (sale.source == "Renouvellement" || sale.source == "Ajustement") 0.055 else 0.05
+        return (50L + kotlin.math.round(sale.usdCents * percent).toLong())
+            .coerceAtMost(sale.usdCents)
+    }
+
+    // Refund-related tax adjustments are unavailable; don't fabricate payout net.
+    fun estimatedAfterTaxesAndFeesUsdCents(sale: Sale): Long? {
+        if (!sale.paid || sale.usdRefundCents > 0L) return null
+        val tax = sale.taxUsdCents ?: return null
+        val fee = estimatedPlatformFeeUsdCents(sale) ?: return null
+        return (sale.usdCents - tax - fee).coerceAtLeast(0L)
+    }
+
     data class FeeBreakdown(
         val grossCents: Long,
         val feeCents: Long,
@@ -346,7 +365,7 @@ object Analytics {
 
     fun generateCsvExport(sales: List<Sale>, currency: String = "USD", eurPerUsd: Double? = null): String {
         val sb = StringBuilder()
-        sb.append("Date,ID,Produit,Source,Statut,Montant Brut,Remboursement,Montant Net,Devise,Mode Test\n")
+        sb.append("Date,ID,Produit,Source,Statut,Total client USD,Remboursement USD,Apres remboursement USD,Devise,Mode Test,Sous-total USD,Remise USD,TVA taxes USD,Taux TVA,TVA incluse,Frais estimes USD,Revenu estime USD\n")
         sales.forEach { s ->
             val date = s.createdAt.take(19).replace('T', ' ')
             val productEscaped = "\"" + s.product.replace("\"", "\"\"") + "\""
@@ -357,7 +376,17 @@ object Analytics {
             val net = String.format(java.util.Locale.US, "%.2f", s.netUsd / 100.0)
             val curr = s.currency
             val test = if (s.testMode) "OUI" else "NON"
-            sb.append("$date,${s.id},$productEscaped,$source,$status,$gross,$refund,$net,$curr,$test\n")
+            fun amount(value: Long?): String = value?.let {
+                String.format(java.util.Locale.US, "%.2f", it / 100.0)
+            } ?: ""
+            val rate = s.taxRate?.toString().orEmpty()
+            val inclusive = s.taxInclusive?.toString().orEmpty()
+            sb.append(listOf(date, s.id, productEscaped, source, status, gross, refund, net, curr, test,
+                amount(s.subtotalUsdCents), amount(s.discountUsdCents), amount(s.taxUsdCents),
+                rate, inclusive, amount(estimatedPlatformFeeUsdCents(s)),
+                amount(estimatedAfterTaxesAndFeesUsdCents(s))
+            ).joinToString(","))
+            sb.append("\n")
         }
         return sb.toString()
     }
