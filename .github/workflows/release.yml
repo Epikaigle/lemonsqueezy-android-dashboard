@@ -43,14 +43,32 @@ jobs:
         shell: bash
         env:
           FIREBASE_ANDROID_CONFIG_JSON: ${{ secrets.FIREBASE_ANDROID_CONFIG_JSON }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ -z "$FIREBASE_ANDROID_CONFIG_JSON" ]]; then
-            echo "::error::Configure FIREBASE_ANDROID_CONFIG_JSON with your Firebase google-services.json."
-            exit 1
+          if [[ -n "$FIREBASE_ANDROID_CONFIG_JSON" ]]; then
+            umask 077
+            printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > app/google-services.json
+            python3 -m json.tool app/google-services.json >/dev/null
+          else
+            # Firebase client configuration is already embedded in the previously
+            # released APK. Reuse those public client resource values only when
+            # the user has not configured the recommended secret yet.
+            echo "Firebase secret unavailable: checking previous verified APK client configuration."
+            mkdir -p "$RUNNER_TEMP/previous"
+            gh release download v1.5.4 --repo "$GITHUB_REPOSITORY" --pattern "app-release.apk" --dir "$RUNNER_TEMP/previous"
+            PREVIOUS="$RUNNER_TEMP/previous/app-release.apk"
+            SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+            SIGNER="$SDK_ROOT/build-tools/36.0.0/apksigner"
+            "$SIGNER" verify "$PREVIOUS"
+            FINGERPRINT="$("$SIGNER" verify --print-certs "$PREVIOUS" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)"
+            EXPECTED="e5eee894f30aa766d9d6bc9a3901c7d955172dd45ed282d331e4e83e8152f908"
+            if [[ "$FINGERPRINT" != "$EXPECTED" ]]; then
+              echo "::error::Existing release signature is not the expected certificate."
+              exit 1
+            fi
+            "$SDK_ROOT/build-tools/36.0.0/aapt2" dump resources "$PREVIOUS" > "$RUNNER_TEMP/previous/resources.txt"
+            python3 .github/scripts/recover-firebase-resources.py "$RUNNER_TEMP/previous/resources.txt" app/src/main/res/values/lemon_firebase_runtime.xml
           fi
-          umask 077
-          printf '%s' "$FIREBASE_ANDROID_CONFIG_JSON" > app/google-services.json
-          python3 -m json.tool app/google-services.json >/dev/null
       - name: Build signed APK and tests
         env:
           LEMON_KEYSTORE_PATH: ${{ runner.temp }}/lemon-dashboard-release.jks
