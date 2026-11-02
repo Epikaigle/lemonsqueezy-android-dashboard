@@ -14,7 +14,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
@@ -41,7 +40,7 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
     ) {
         Text("Versements", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 
-        // Hero Card: Prochain virement estimé avec montant
+        // Hero Card: Prochain virement estimé
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -85,12 +84,12 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
 
                     Text(
                         text = Analytics.moneyRange(payoutEst.pocketNextPayoutUsdCents, currency, snapshot?.eurPerUsd),
-                        fontSize = 26.sp,
+                        fontSize = 28.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
 
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -122,38 +121,7 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
             }
         }
 
-        // Monthly Net Pocket Card: Ce que vous gagnez par mois réellement
-        DashboardCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Gains mensuels nets réels",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 15.sp,
-                        color = TextPrimary
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = "Net en poche après TVA, frais MoR (6,5% + 0,50 $) et virement (1%)",
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
-                }
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    text = "${Analytics.moneyRange(payoutEst.monthlyNetPocketUsdCents, currency, snapshot?.eurPerUsd)} / mois",
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    color = MintSuccessLight
-                )
-            }
-        }
-
-        // Funds Breakdown: Déjà versé sur compte vs En rétention
+        // Funds Breakdown: Dernier virement reçu vs En réserve
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             val paidValue = if (currency.equals("EUR", ignoreCase = true) && payoutEst.verifiedPastPayoutEurCents != null) {
                 Analytics.localMoney(payoutEst.verifiedPastPayoutEurCents, "EUR")
@@ -161,15 +129,15 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                 Analytics.money(payoutEst.alreadyPaidUsdCents, currency, snapshot?.eurPerUsd)
             }
             StatCard(
-                title = "Déjà versé sur compte",
+                title = "Dernier virement reçu",
                 value = paidValue,
                 icon = Icons.Default.AccountBalance,
                 iconTint = MintSuccessLight,
-                subtitle = "62,86 € reçu le 29 oct.",
+                subtitle = "Reçu le 29 oct.",
                 modifier = Modifier.weight(1f)
             )
             StatCard(
-                title = "En rétention (13j)",
+                title = "En réserve (13j)",
                 value = Analytics.money(payoutEst.pocketHoldingUsdCents, currency, snapshot?.eurPerUsd),
                 icon = Icons.Default.LockClock,
                 iconTint = AmberWarningLight,
@@ -191,7 +159,7 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                             Analytics.money(payout.amountUsdCents, currency, snapshot?.eurPerUsd)
                         }
                         val subtitleText = if (payout.verifiedEurCents != null) {
-                            "Reçu le 29 oct. sur compte bancaire"
+                            "Reçu le 29 oct. sur votre compte bancaire"
                         } else {
                             "Transféré sur compte bancaire"
                         }
@@ -233,37 +201,6 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
             }
         }
 
-        // Payout Lifecycle Steps Timeline
-        DashboardCard {
-            Text("Cycle des versements (MoR)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(10.dp))
-
-            TimelineStep(
-                step = 1,
-                title = "Paiement client",
-                description = "Vente confirmée et créditée sur le solde.",
-                isDone = true
-            )
-            TimelineStep(
-                step = 2,
-                title = "Rétention de 13 jours",
-                description = "Période de garantie anti-litiges et contestations.",
-                isDone = true
-            )
-            TimelineStep(
-                step = 3,
-                title = "Clôture de cycle (1er & 15)",
-                description = "Consolidation des ventes prêtes (minimum 50 $).",
-                isDone = true
-            )
-            TimelineStep(
-                step = 4,
-                title = "Virement bancaire (14 & 28)",
-                description = "Ordre de virement vers votre compte bancaire.",
-                isDone = payoutEst.alreadyPaidUsdCents > 0
-            )
-        }
-
         // Official External Link Card
         DashboardCard(backgroundColor = DarkSurfaceVariant) {
             Row(
@@ -274,7 +211,7 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Lemon, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Relevés Lemon Squeezy", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
+                    Text("Relevés officiels Lemon Squeezy", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextPrimary)
                 }
                 Button(
                     onClick = { uri.openUri("https://app.lemonsqueezy.com/settings/payout") },
@@ -285,36 +222,6 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                     Text("Ouvrir ↗", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun TimelineStep(step: Int, title: String, description: String, isDone: Boolean) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(22.dp)
-                .clip(CircleShape)
-                .background(if (isDone) MintSuccessContainer else DarkSurfaceVariant),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = step.toString(),
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (isDone) MintSuccessLight else TextMuted
-            )
-        }
-        Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
-            Text(text = title, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = TextPrimary)
-            Text(text = description, color = TextSecondary, fontSize = 11.sp)
         }
     }
 }

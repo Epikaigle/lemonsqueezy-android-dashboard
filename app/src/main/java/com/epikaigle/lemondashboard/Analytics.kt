@@ -242,11 +242,12 @@ object Analytics {
             val date = dateOf(sale.createdAt) ?: continue
             val net = sale.netUsd
             val pocketNet = realPocketNetUsdCents(sale)
+            val effectiveNet = if (sale.taxUsdCents != null) pocketNet else net
             if (date.isAfter(cutoff)) {
                 holding += net
                 pocketHolding += pocketNet
             } else {
-                matureSales.add(date to net)
+                matureSales.add(date to effectiveNet)
             }
         }
 
@@ -308,6 +309,9 @@ object Analytics {
         val monthSales = sales.filter { inPeriod(dateOf(it.createdAt), Period.MONTH, today) && it.paid }
         val monthlyNetPocket = monthSales.sumOf { realPocketNetUsdCents(it) }
 
+        val thresholdTarget = if (sales.any { it.taxUsdCents != null }) pocketNext else projectedNext
+        val thresholdReached = thresholdTarget >= 5000L
+
         return PayoutEstimates(
             readyUsdCents = accumulated,
             holdingUsdCents = holding,
@@ -315,9 +319,9 @@ object Analytics {
             daysUntilNextPayout = daysUntil,
             alreadyPaidUsdCents = alreadyPaid,
             projectedNextPayoutUsdCents = if (projectedNext > 0L) projectedNext else accumulated,
-            reachesThreshold = (if (projectedNext > 0L) projectedNext else accumulated) >= 5000L,
+            reachesThreshold = thresholdReached,
             pastPayouts = pastPayouts,
-            pocketNextPayoutUsdCents = if (pocketNext > 0L) pocketNext else (projectedNext * 0.85).toLong(),
+            pocketNextPayoutUsdCents = if (pocketNext > 0L) pocketNext else accumulated,
             pocketHoldingUsdCents = pocketHolding,
             monthlyNetPocketUsdCents = monthlyNetPocket,
             verifiedPastPayoutEurCents = 6286L
