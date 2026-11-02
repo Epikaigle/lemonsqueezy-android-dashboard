@@ -167,6 +167,17 @@ class AnalyticsTest {
         assertEquals(7000L, est.holdingUsdCents)
     }
 
+    @Test fun realPocketNetCalculatesExactDeductions() {
+        // Order 30€ (3345 USD cents), VAT 5.81€ (581 USD cents)
+        val s = sale("lifetime", 3345, at = "2026-10-14T19:14:00Z").copy(taxUsdCents = 581L)
+        val pocketNet = Analytics.realPocketNetUsdCents(s)
+        // 3345 - 581 - (50 + round(3345 * 0.065) = 267) = 2497 * 0.99 = 2472
+        assertEquals(2472L, pocketNet)
+
+        val range = Analytics.moneyRange(1000L, "EUR", 1.0 / 1.1511)
+        assertTrue(range.contains("–") || range.contains("-"))
+    }
+
     @Test fun mrrCalculationNormalizesBillingIntervals() {
         val monthly = Subscription("1", "1", "Monthly", "", "active", "", "", false,
             catalogPriceCents = 2900L, billingInterval = "month", billingIntervalCount = 1)

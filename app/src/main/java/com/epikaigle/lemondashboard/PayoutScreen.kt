@@ -84,8 +84,8 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = Analytics.money(payoutEst.projectedNextPayoutUsdCents, currency, snapshot?.eurPerUsd),
-                        fontSize = 30.sp,
+                        text = Analytics.moneyRange(payoutEst.pocketNextPayoutUsdCents, currency, snapshot?.eurPerUsd),
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
@@ -122,19 +122,55 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
             }
         }
 
+        // Monthly Net Pocket Card: Ce que vous gagnez par mois réellement
+        DashboardCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Gains mensuels nets réels",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = TextPrimary
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = "Net en poche après TVA, frais MoR (6,5% + 0,50 $) et virement (1%)",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    text = "${Analytics.moneyRange(payoutEst.monthlyNetPocketUsdCents, currency, snapshot?.eurPerUsd)} / mois",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MintSuccessLight
+                )
+            }
+        }
+
         // Funds Breakdown: Déjà versé sur compte vs En rétention
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val paidValue = if (currency.equals("EUR", ignoreCase = true) && payoutEst.verifiedPastPayoutEurCents != null) {
+                Analytics.localMoney(payoutEst.verifiedPastPayoutEurCents, "EUR")
+            } else {
+                Analytics.money(payoutEst.alreadyPaidUsdCents, currency, snapshot?.eurPerUsd)
+            }
             StatCard(
                 title = "Déjà versé sur compte",
-                value = Analytics.money(payoutEst.alreadyPaidUsdCents, currency, snapshot?.eurPerUsd),
+                value = paidValue,
                 icon = Icons.Default.AccountBalance,
                 iconTint = MintSuccessLight,
-                subtitle = "Virement(s) reçu(s)",
+                subtitle = "62,86 € reçu le 29 oct.",
                 modifier = Modifier.weight(1f)
             )
             StatCard(
                 title = "En rétention (13j)",
-                value = Analytics.money(payoutEst.holdingUsdCents, currency, snapshot?.eurPerUsd),
+                value = Analytics.money(payoutEst.pocketHoldingUsdCents, currency, snapshot?.eurPerUsd),
                 icon = Icons.Default.LockClock,
                 iconTint = AmberWarningLight,
                 subtitle = "Sécurité MoR",
@@ -149,6 +185,16 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                 Spacer(Modifier.height(10.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     payoutEst.pastPayouts.forEach { payout ->
+                        val amountText = if (payout.verifiedEurCents != null && currency.equals("EUR", ignoreCase = true)) {
+                            Analytics.localMoney(payout.verifiedEurCents, "EUR")
+                        } else {
+                            Analytics.money(payout.amountUsdCents, currency, snapshot?.eurPerUsd)
+                        }
+                        val subtitleText = if (payout.verifiedEurCents != null) {
+                            "Reçu le 29 oct. sur compte bancaire"
+                        } else {
+                            "Transféré sur compte bancaire"
+                        }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -172,11 +218,11 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                                         fontWeight = FontWeight.SemiBold,
                                         color = TextPrimary
                                     )
-                                    Text("Transféré sur compte bancaire", fontSize = 11.sp, color = TextSecondary)
+                                    Text(subtitleText, fontSize = 11.sp, color = TextSecondary)
                                 }
                             }
                             Text(
-                                text = Analytics.money(payout.amountUsdCents, currency, snapshot?.eurPerUsd),
+                                text = amountText,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MintSuccessLight

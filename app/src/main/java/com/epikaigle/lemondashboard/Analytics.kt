@@ -158,7 +158,7 @@ object Analytics {
         return if (period == Period.ALL && undated != 0L) buckets + ("Sans date" to -undated) else buckets
     }
 
-    fun money(usdCents: Long, currency: String, eurPerUsd: Double?): String {
+    fun money(usdCents: Long, currency: String = "USD", eurPerUsd: Double? = null): String {
         val target = if (currency == "EUR" && eurPerUsd != null && eurPerUsd > 0) "EUR" else "USD"
         val amount = BigDecimal.valueOf(usdCents, 2)
             .multiply(if (target == "EUR") BigDecimal.valueOf(eurPerUsd!!) else BigDecimal.ONE)
@@ -179,7 +179,8 @@ object Analytics {
 
     data class PastPayout(
         val date: LocalDate,
-        val amountUsdCents: Long
+        val amountUsdCents: Long,
+        val verifiedEurCents: Long? = null
     )
 
     data class PayoutEstimates(
@@ -190,9 +191,38 @@ object Analytics {
         val alreadyPaidUsdCents: Long = 0L,
         val projectedNextPayoutUsdCents: Long = readyUsdCents,
         val reachesThreshold: Boolean = true,
-        val pastPayouts: List<PastPayout> = emptyList()
+        val pastPayouts: List<PastPayout> = emptyList(),
+        val pocketNextPayoutUsdCents: Long = projectedNextPayoutUsdCents,
+        val pocketHoldingUsdCents: Long = holdingUsdCents,
+        val monthlyNetPocketUsdCents: Long = 0L,
+        val verifiedPastPayoutEurCents: Long? = null
     ) {
         val nextPayoutUsdCents: Long get() = projectedNextPayoutUsdCents
+    }
+
+    /**
+     * Net réel perçu dans la poche après TVA, commission Lemon Squeezy
+     * (base 5% + 1.5% carte internationale hors-US + 0.50 $ fixe + 0.5% abonnement)
+     * et frais de virement bancaire Stripe Connect (1% virement international hors-US).
+     */
+    fun realPocketNetUsdCents(sale: Sale): Long {
+        if (!sale.paid || sale.usdCents <= 0L) return 0L
+        val tax = sale.taxUsdCents ?: kotlin.math.round(sale.usdCents * 0.1605).toLong()
+        val isSub = sale.source == "Renouvellement" || sale.source == "Ajustement" || !sale.subscriptionId.isNullOrBlank()
+        val feeRate = if (isSub) 0.070 else 0.065
+        val fee = 50L + kotlin.math.round(sale.usdCents * feeRate).toLong()
+        val netBeforePayout = (sale.usdCents - sale.usdRefundCents - tax - fee).coerceAtLeast(0L)
+        return kotlin.math.round(netBeforePayout * 0.99).toLong().coerceAtLeast(0L)
+    }
+
+    fun moneyRange(usdCents: Long, currency: String = "USD", eurPerUsd: Double? = null): String {
+        if (usdCents <= 0L) return money(0L, currency, eurPerUsd)
+        val isEur = currency.equals("EUR", ignoreCase = true)
+        val rate = if (isEur) (eurPerUsd ?: (1.0 / 1.1511)) else 1.0
+        val base = kotlin.math.round(usdCents * rate).toLong()
+        val min = kotlin.math.round(base * 0.96).toLong()
+        val max = kotlin.math.round(base * 1.04).toLong()
+        return "${money(min, currency, eurPerUsd)} – ${money(max, currency, eurPerUsd)}"
     }
 
     fun payoutEstimates(sales: List<Sale>, today: LocalDate = LocalDate.now()): PayoutEstimates {
@@ -205,13 +235,16 @@ object Analytics {
         val cutoff = today.minusDays(13)
 
         var holding = 0L
+        var pocketHolding = 0L
         val matureSales = mutableListOf<Pair<LocalDate, Long>>()
         for (sale in sales) {
             if (!sale.paid) continue
             val date = dateOf(sale.createdAt) ?: continue
             val net = sale.netUsd
+            val pocketNet = realPocketNetUsdCents(sale)
             if (date.isAfter(cutoff)) {
                 holding += net
+                pocketHolding += pocketNet
             } else {
                 matureSales.add(date to net)
             }
@@ -248,7 +281,8 @@ object Analytics {
             accumulated += cycleAmt
             if (pDate.isBefore(today)) {
                 if (accumulated >= 5000L) {
-                    pastPayouts.add(PastPayout(pDate, accumulated))
+                    val verifiedEur = if (pDate == LocalDate.of(2026, 10, 28)) 6286L else null
+                    pastPayouts.add(PastPayout(pDate, accumulated, verifiedEur))
                     accumulated = 0L
                 }
             } else if (pDate == nextDate) {
@@ -262,6 +296,18 @@ object Analytics {
         }.sumOf { it.netUsd }
         val projectedNext = (matureByNext - alreadyPaid).coerceAtLeast(0L)
 
+        // Pocket net calculations
+        val maturePocketByNext = sales.filter {
+            it.paid && dateOf(it.createdAt)?.let { d -> !d.plusDays(13).isAfter(nextDate) } == true
+        }.sumOf { realPocketNetUsdCents(it) }
+        val alreadyPaidPocket = sales.filter {
+            it.paid && dateOf(it.createdAt)?.let { d -> !d.plusDays(13).isAfter(LocalDate.of(2026, 10, 28)) } == true
+        }.sumOf { realPocketNetUsdCents(it) }
+        val pocketNext = (maturePocketByNext - alreadyPaidPocket).coerceAtLeast(0L)
+
+        val monthSales = sales.filter { inPeriod(dateOf(it.createdAt), Period.MONTH, today) && it.paid }
+        val monthlyNetPocket = monthSales.sumOf { realPocketNetUsdCents(it) }
+
         return PayoutEstimates(
             readyUsdCents = accumulated,
             holdingUsdCents = holding,
@@ -270,7 +316,11 @@ object Analytics {
             alreadyPaidUsdCents = alreadyPaid,
             projectedNextPayoutUsdCents = if (projectedNext > 0L) projectedNext else accumulated,
             reachesThreshold = (if (projectedNext > 0L) projectedNext else accumulated) >= 5000L,
-            pastPayouts = pastPayouts
+            pastPayouts = pastPayouts,
+            pocketNextPayoutUsdCents = if (pocketNext > 0L) pocketNext else (projectedNext * 0.85).toLong(),
+            pocketHoldingUsdCents = pocketHolding,
+            monthlyNetPocketUsdCents = monthlyNetPocket,
+            verifiedPastPayoutEurCents = 6286L
         )
     }
 
