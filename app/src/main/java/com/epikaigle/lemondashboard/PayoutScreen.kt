@@ -41,7 +41,7 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
     ) {
         Text("Versements", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
 
-        // Next Payout Countdown Card
+        // Hero Card: Prochain virement estimé avec montant
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(16.dp),
@@ -84,23 +84,52 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = payoutEst.nextPayoutDate.format(DateTimeFormatter.ofPattern("EEEE dd MMMM yyyy", Locale.FRANCE))
-                            .replaceFirstChar { it.uppercase() },
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = Analytics.money(payoutEst.projectedNextPayoutUsdCents, currency, snapshot?.eurPerUsd),
+                        fontSize = 30.sp,
+                        fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary
                     )
+
+                    Spacer(Modifier.height(4.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = payoutEst.nextPayoutDate.format(DateTimeFormatter.ofPattern("EEEE dd MMMM yyyy", Locale.FRANCE))
+                                .replaceFirstChar { it.uppercase() },
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextSecondary
+                        )
+
+                        Surface(
+                            color = if (payoutEst.reachesThreshold) MintSuccessContainer.copy(alpha = 0.4f) else AmberWarningContainer.copy(alpha = 0.4f),
+                            shape = RoundedCornerShape(100.dp)
+                        ) {
+                            Text(
+                                text = if (payoutEst.reachesThreshold) "Seuil atteint (≥ 50 $)" else "En attente seuil 50 $",
+                                color = if (payoutEst.reachesThreshold) MintSuccessLight else AmberWarningLight,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
 
-        // Funds Breakdown: Ready vs In Holding
+        // Funds Breakdown: Déjà versé sur compte vs En rétention
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             StatCard(
-                title = "Ventes prêtes",
-                value = Analytics.money(payoutEst.readyUsdCents, currency, snapshot?.eurPerUsd),
-                icon = Icons.Default.CheckCircle,
+                title = "Déjà versé sur compte",
+                value = Analytics.money(payoutEst.alreadyPaidUsdCents, currency, snapshot?.eurPerUsd),
+                icon = Icons.Default.AccountBalance,
                 iconTint = MintSuccessLight,
+                subtitle = "Virement(s) reçu(s)",
                 modifier = Modifier.weight(1f)
             )
             StatCard(
@@ -108,13 +137,59 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                 value = Analytics.money(payoutEst.holdingUsdCents, currency, snapshot?.eurPerUsd),
                 icon = Icons.Default.LockClock,
                 iconTint = AmberWarningLight,
+                subtitle = "Sécurité MoR",
                 modifier = Modifier.weight(1f)
             )
         }
 
+        // Past Payouts History (if any)
+        if (payoutEst.pastPayouts.isNotEmpty()) {
+            DashboardCard {
+                Text("Virements bancaires effectués", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                Spacer(Modifier.height(10.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    payoutEst.pastPayouts.forEach { payout ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    color = MintSuccessContainer,
+                                    shape = CircleShape,
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Check, contentDescription = null, tint = MintSuccessLight, modifier = Modifier.size(14.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = payout.date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.FRANCE)),
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                    Text("Transféré sur compte bancaire", fontSize = 11.sp, color = TextSecondary)
+                                }
+                            }
+                            Text(
+                                text = Analytics.money(payout.amountUsdCents, currency, snapshot?.eurPerUsd),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MintSuccessLight
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         // Payout Lifecycle Steps Timeline
         DashboardCard {
-            Text("Cycle des versements", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Text("Cycle des versements (MoR)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
             Spacer(Modifier.height(10.dp))
 
             TimelineStep(
@@ -139,7 +214,7 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                 step = 4,
                 title = "Virement bancaire (14 & 28)",
                 description = "Ordre de virement vers votre compte bancaire.",
-                isDone = false
+                isDone = payoutEst.alreadyPaidUsdCents > 0
             )
         }
 
@@ -153,10 +228,10 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Lemon, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text("Portail Lemon Squeezy", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
+                    Text("Relevés Lemon Squeezy", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = TextPrimary)
                 }
                 Button(
-                    onClick = { uri.openUri("https://app.lemonsqueezy.com/") },
+                    onClick = { uri.openUri("https://app.lemonsqueezy.com/settings/payout") },
                     shape = RoundedCornerShape(10.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground),
                     contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)

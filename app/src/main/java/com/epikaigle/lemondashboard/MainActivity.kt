@@ -40,9 +40,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (!BuildConfig.DEBUG) {
-            window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
-        }
+        // Screenshots allowed across all builds
+        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         PushNotifications.createChannel(this)
         handleNotificationIntent(intent)
         setContent {

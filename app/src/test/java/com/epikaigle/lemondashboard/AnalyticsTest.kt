@@ -145,6 +145,28 @@ class AnalyticsTest {
         assertEquals(12L, est.daysUntilNextPayout)
     }
 
+    @Test fun payoutEstimatesCalculatesPastAndProjectedPayouts() {
+        // date is 2026-10-16.
+        // Past cycle: Sept 20 sale (> 15th -> Oct 14 payout). Matured Oct 3, paid on Oct 14.
+        val pastSale = sale("past", 6500, at = "2026-09-20T10:00:00Z")
+        // Upcoming cycle: Oct 5 sale (<= 15th -> Oct 28 payout). Matures Oct 18 (< Oct 28).
+        val currentSale = sale("curr", 5500, at = "2026-10-05T10:00:00Z")
+        // Recent sale in holding (matures after next payout date):
+        val futureHolding = sale("late", 1500, at = "2026-10-16T08:00:00Z")
+
+        val est = Analytics.payoutEstimates(listOf(pastSale, currentSale, futureHolding), date)
+
+        assertEquals(6500L, est.alreadyPaidUsdCents)
+        assertEquals(1, est.pastPayouts.size)
+        assertEquals(LocalDate.of(2026, 10, 14), est.pastPayouts[0].date)
+        assertEquals(6500L, est.pastPayouts[0].amountUsdCents)
+
+        assertEquals(5500L, est.projectedNextPayoutUsdCents)
+        assertTrue(est.reachesThreshold)
+        // On Oct 16, both Oct 5 (held 11 days) and Oct 16 are within the 13-day holding period:
+        assertEquals(7000L, est.holdingUsdCents)
+    }
+
     @Test fun mrrCalculationNormalizesBillingIntervals() {
         val monthly = Subscription("1", "1", "Monthly", "", "active", "", "", false,
             catalogPriceCents = 2900L, billingInterval = "month", billingIntervalCount = 1)

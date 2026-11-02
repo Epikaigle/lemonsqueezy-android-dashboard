@@ -177,12 +177,23 @@ object Analytics {
         "${BigDecimal.valueOf(cents, 2)} ${currency.uppercase(Locale.ROOT)}"
     }
 
+    data class PastPayout(
+        val date: LocalDate,
+        val amountUsdCents: Long
+    )
+
     data class PayoutEstimates(
         val readyUsdCents: Long,
         val holdingUsdCents: Long,
         val nextPayoutDate: LocalDate,
-        val daysUntilNextPayout: Long
-    )
+        val daysUntilNextPayout: Long,
+        val alreadyPaidUsdCents: Long = 0L,
+        val projectedNextPayoutUsdCents: Long = readyUsdCents,
+        val reachesThreshold: Boolean = true,
+        val pastPayouts: List<PastPayout> = emptyList()
+    ) {
+        val nextPayoutUsdCents: Long get() = projectedNextPayoutUsdCents
+    }
 
     fun payoutEstimates(sales: List<Sale>, today: LocalDate = LocalDate.now()): PayoutEstimates {
         val nextDate = when {
@@ -193,8 +204,8 @@ object Analytics {
         val daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, nextDate).coerceAtLeast(0)
         val cutoff = today.minusDays(13)
 
-        var ready = 0L
         var holding = 0L
+        val matureSales = mutableListOf<Pair<LocalDate, Long>>()
         for (sale in sales) {
             if (!sale.paid) continue
             val date = dateOf(sale.createdAt) ?: continue
@@ -202,14 +213,64 @@ object Analytics {
             if (date.isAfter(cutoff)) {
                 holding += net
             } else {
-                ready += net
+                matureSales.add(date to net)
             }
         }
+
+        fun cyclePayoutDate(d: LocalDate): LocalDate {
+            return if (d.dayOfMonth <= 15) {
+                d.withDayOfMonth(28)
+            } else {
+                d.plusMonths(1).withDayOfMonth(14)
+            }
+        }
+
+        val cycleAmounts = matureSales.groupBy { cyclePayoutDate(it.first) }
+            .mapValues { (_, items) -> items.sumOf { it.second } }
+
+        val earliestDate = matureSales.minOfOrNull { cyclePayoutDate(it.first) } ?: nextDate
+        val payoutDates = mutableListOf<LocalDate>()
+        var cursor = earliestDate.withDayOfMonth(if (earliestDate.dayOfMonth <= 14) 14 else 28)
+        while (!cursor.isAfter(nextDate)) {
+            payoutDates.add(cursor)
+            cursor = if (cursor.dayOfMonth == 14) {
+                cursor.withDayOfMonth(28)
+            } else {
+                cursor.plusMonths(1).withDayOfMonth(14)
+            }
+        }
+
+        val pastPayouts = mutableListOf<PastPayout>()
+        var accumulated = 0L
+
+        for (pDate in payoutDates) {
+            val cycleAmt = cycleAmounts[pDate] ?: 0L
+            accumulated += cycleAmt
+            if (pDate.isBefore(today)) {
+                if (accumulated >= 5000L) {
+                    pastPayouts.add(PastPayout(pDate, accumulated))
+                    accumulated = 0L
+                }
+            } else if (pDate == nextDate) {
+                break
+            }
+        }
+
+        val alreadyPaid = pastPayouts.sumOf { it.amountUsdCents }
+        val matureByNext = sales.filter {
+            it.paid && dateOf(it.createdAt)?.let { d -> !d.plusDays(13).isAfter(nextDate) } == true
+        }.sumOf { it.netUsd }
+        val projectedNext = (matureByNext - alreadyPaid).coerceAtLeast(0L)
+
         return PayoutEstimates(
-            readyUsdCents = ready,
+            readyUsdCents = accumulated,
             holdingUsdCents = holding,
             nextPayoutDate = nextDate,
-            daysUntilNextPayout = daysUntil
+            daysUntilNextPayout = daysUntil,
+            alreadyPaidUsdCents = alreadyPaid,
+            projectedNextPayoutUsdCents = if (projectedNext > 0L) projectedNext else accumulated,
+            reachesThreshold = (if (projectedNext > 0L) projectedNext else accumulated) >= 5000L,
+            pastPayouts = pastPayouts
         )
     }
 
