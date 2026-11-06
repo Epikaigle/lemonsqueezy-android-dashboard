@@ -27,7 +27,9 @@ data class Sale(
     val taxUsdCents: Long? = null,
     val taxName: String = "",
     val taxRate: Double? = null,
-    val taxInclusive: Boolean? = null
+    val taxInclusive: Boolean? = null,
+    val userName: String = "",
+    val userEmail: String = ""
 ) {
     val paid: Boolean get() = status in setOf("paid", "refunded", "partial_refund")
     val netUsd: Long get() = if (paid) (usdCents - usdRefundCents).coerceAtLeast(0) else 0
@@ -46,7 +48,9 @@ data class Subscription(
     val catalogPriceCents: Long? = null,
     val catalogCurrency: String = "",
     val billingInterval: String = "",
-    val billingIntervalCount: Int = 1
+    val billingIntervalCount: Int = 1,
+    val userName: String = "",
+    val userEmail: String = ""
 )
 
 data class LicenseKey(
@@ -63,7 +67,9 @@ data class LicenseKey(
     val instancesCount: Int,
     val disabled: Boolean,
     val createdAt: String,
-    val expiresAt: String = ""
+    val expiresAt: String = "",
+    val userName: String = "",
+    val userEmail: String = ""
 )
 
 data class Snapshot(
@@ -106,6 +112,8 @@ object SnapshotCodec {
                     put("taxName", s.taxName)
                     put("taxRate", s.taxRate ?: JSONObject.NULL)
                     put("taxInclusive", s.taxInclusive ?: JSONObject.NULL)
+                    put("userName", s.userName)
+                    put("userEmail", s.userEmail)
                 })
             }
         })
@@ -122,6 +130,8 @@ object SnapshotCodec {
                     put("catalogCurrency", s.catalogCurrency)
                     put("billingInterval", s.billingInterval)
                     put("billingIntervalCount", s.billingIntervalCount)
+                    put("userName", s.userName)
+                    put("userEmail", s.userEmail)
                 })
             }
         })
@@ -134,6 +144,8 @@ object SnapshotCodec {
                     put("keyShort", k.keyShort); put("status", k.status)
                     put("activationLimit", k.activationLimit); put("instancesCount", k.instancesCount)
                     put("disabled", k.disabled); put("createdAt", k.createdAt); put("expiresAt", k.expiresAt)
+                    put("userName", k.userName)
+                    put("userEmail", k.userEmail)
                 })
             }
         })
@@ -164,7 +176,9 @@ object SnapshotCodec {
                 taxUsdCents = it.optionalLong("taxUsdCents"),
                 taxName = it.optString("taxName", ""),
                 taxRate = if (it.has("taxRate") && !it.isNull("taxRate")) it.getDouble("taxRate") else null,
-                taxInclusive = if (it.has("taxInclusive") && !it.isNull("taxInclusive")) it.getBoolean("taxInclusive") else null
+                taxInclusive = if (it.has("taxInclusive") && !it.isNull("taxInclusive")) it.getBoolean("taxInclusive") else null,
+                userName = it.optString("userName", ""),
+                userEmail = it.optString("userEmail", "")
             )
         }
         val subscriptions = root.getJSONArray("subscriptions").objects().map {
@@ -178,7 +192,9 @@ object SnapshotCodec {
                 catalogPriceCents = if (it.isNull("catalogPriceCents")) null else it.optLong("catalogPriceCents"),
                 catalogCurrency = it.optString("catalogCurrency"),
                 billingInterval = it.optString("billingInterval"),
-                billingIntervalCount = it.optInt("billingIntervalCount", 1)
+                billingIntervalCount = it.optInt("billingIntervalCount", 1),
+                userName = it.optString("userName", ""),
+                userEmail = it.optString("userEmail", "")
             )
         }
         val licenseKeys = root.optJSONArray("licenseKeys")?.objects()?.map {
@@ -196,7 +212,9 @@ object SnapshotCodec {
                 instancesCount = it.optInt("instancesCount", 0),
                 disabled = it.optBoolean("disabled", false),
                 createdAt = it.getString("createdAt"),
-                expiresAt = it.optString("expiresAt")
+                expiresAt = it.optString("expiresAt"),
+                userName = it.optString("userName", ""),
+                userEmail = it.optString("userEmail", "")
             )
         } ?: emptyList()
         return Snapshot(stores, sales, subscriptions, root.getString("fetchedAt"),

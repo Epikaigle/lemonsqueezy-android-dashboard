@@ -3,8 +3,9 @@ package com.epikaigle.lemondashboard
 import org.json.JSONObject
 
 /**
- * Pure financial mapping, independently unit tested with documented JSON:API fields.
- * Never copies user_name, user_email, card details, payment URLs or customer IDs.
+ * Financial and customer mapping, independently unit tested with documented JSON:API fields.
+ * Extracts user_name and user_email for customer identification on orders and licenses.
+ * Never stores card details or sensitive payment credentials.
  * Unknown billing reasons fail closed to prevent silent over-counting.
  */
 internal object LemonMapper {
@@ -43,13 +44,20 @@ internal object LemonMapper {
             taxUsdCents = a.optionalCents("tax_usd"),
             taxName = a.optString("tax_name", ""),
             taxRate = a.optString("tax_rate", "").toDoubleOrNull(),
-            taxInclusive = a.taxInclusiveOrNull()
+            taxInclusive = a.taxInclusiveOrNull(),
+            userName = a.optString("user_name", ""),
+            userEmail = a.optString("user_email", "")
         )
     }
 
     fun renewalInvoices(invoices: List<JSONObject>, subscriptions: List<JSONObject>): List<Sale> {
-        val productNames = subscriptions.associate { sub ->
-            sub.getString("id") to sub.attributes().optString("product_name", "Abonnement")
+        val subMeta = subscriptions.associate { sub ->
+            val attr = sub.attributes()
+            sub.getString("id") to Triple(
+                attr.optString("product_name", "Abonnement"),
+                attr.optString("user_name", ""),
+                attr.optString("user_email", "")
+            )
         }
         return invoices.mapNotNull { record ->
             val a = record.attributes()
@@ -59,11 +67,14 @@ internal object LemonMapper {
             }
             if (reason == "initial") return@mapNotNull null
             val subscriptionId = a.idValue("subscription_id")
+            val meta = subMeta[subscriptionId]
+            val userName = a.optString("user_name", "").ifBlank { meta?.second.orEmpty() }
+            val userEmail = a.optString("user_email", "").ifBlank { meta?.third.orEmpty() }
             Sale(
                 id = "invoice:${record.getString("id")}",
                 storeId = a.idValue("store_id"),
                 source = if (reason == "renewal") "Renouvellement" else "Ajustement",
-                product = productNames[subscriptionId] ?: "Abonnement",
+                product = meta?.first ?: "Abonnement",
                 status = a.getString("status"),
                 currency = a.getString("currency"),
                 originalCents = a.getLong("total"),
@@ -74,15 +85,17 @@ internal object LemonMapper {
                 testMode = a.getBoolean("test_mode"),
                 subscriptionId = subscriptionId,
                 refundedAt = if (a.isNull("refunded_at")) "" else a.optString("refunded_at"),
-            subtotalCents = a.optionalCents("subtotal"),
-            discountCents = a.optionalCents("discount_total"),
-            taxCents = a.optionalCents("tax"),
-            subtotalUsdCents = a.optionalCents("subtotal_usd"),
-            discountUsdCents = a.optionalCents("discount_total_usd"),
-            taxUsdCents = a.optionalCents("tax_usd"),
-            taxName = a.optString("tax_name", ""),
-            taxRate = a.optString("tax_rate", "").toDoubleOrNull(),
-            taxInclusive = a.taxInclusiveOrNull()
+                subtotalCents = a.optionalCents("subtotal"),
+                discountCents = a.optionalCents("discount_total"),
+                taxCents = a.optionalCents("tax"),
+                subtotalUsdCents = a.optionalCents("subtotal_usd"),
+                discountUsdCents = a.optionalCents("discount_total_usd"),
+                taxUsdCents = a.optionalCents("tax_usd"),
+                taxName = a.optString("tax_name", ""),
+                taxRate = a.optString("tax_rate", "").toDoubleOrNull(),
+                taxInclusive = a.taxInclusiveOrNull(),
+                userName = userName,
+                userEmail = userEmail
             )
         }
     }

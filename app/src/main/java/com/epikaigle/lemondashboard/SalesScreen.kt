@@ -284,24 +284,23 @@ fun SaleItemCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(2.dp))
+                val customer = listOf(sale.userName, sale.userEmail).filter { it.isNotBlank() }.joinToString(" • ")
                 Text(
-                    text = "${sale.source} • ${friendlyDate(sale.createdAt)}",
+                    text = if (customer.isNotBlank()) customer else sale.source,
                     fontSize = 11.sp,
-                    color = TextSecondary
+                    color = if (customer.isNotBlank()) TextSecondary else TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-                if (sale.testMode) {
-                    Text("MODE TEST", fontSize = 9.sp, color = Lemon, fontWeight = FontWeight.Bold)
-                }
-                if (!sale.paid) {
-                    Text(sale.status, fontSize = 11.sp, color = CoralDangerLight, fontWeight = FontWeight.Medium)
-                } else if (sale.usdRefundCents > 0L) {
-                    Text(
-                        text = if (sale.refundedAt.isNotBlank()) "Remboursé le ${friendlyDate(sale.refundedAt)}"
-                        else "Remboursement partiel",
-                        fontSize = 11.sp,
-                        color = CoralDangerLight
-                    )
-                }
+                Spacer(Modifier.height(2.dp))
+                val testSuffix = if (sale.testMode) " • TEST" else ""
+                Text(
+                    text = "${if (customer.isNotBlank()) "${sale.source} • " else ""}${friendlyDate(sale.createdAt)}$testSuffix",
+                    fontSize = 10.sp,
+                    color = TextMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             Spacer(Modifier.width(8.dp))
@@ -311,21 +310,44 @@ fun SaleItemCard(
                     text = Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd),
                     fontWeight = FontWeight.Bold,
                     fontSize = 14.sp,
-                    color = if (sale.paid) TextPrimary else TextMuted
+                    color = if (sale.paid) TextPrimary else TextMuted,
+                    softWrap = false,
+                    maxLines = 1
                 )
-                if (!sale.paid || sale.currency.uppercase() != currency.uppercase()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = if (sale.paid) Analytics.localMoney(originalNet, sale.currency) else "Non encaissé",
-                        color = TextSecondary,
-                        fontSize = 11.sp
-                    )
+                Spacer(Modifier.height(2.dp))
+                val statusText = when {
+                    !sale.paid -> if (sale.status == "pending") "En attente" else sale.status.replaceFirstChar { it.uppercase() }
+                    sale.usdRefundCents > 0L -> "Remboursé"
+                    else -> "Payé"
                 }
-                Analytics.estimatedAfterTaxesAndFeesUsdCents(sale)?.let { projected ->
-                    Spacer(Modifier.height(2.dp))
-                    Text("≈ " + Analytics.money(projected, currency, snapshot.eurPerUsd) + " après TVA/frais",
-                        fontSize = 10.sp, color = MintSuccessLight)
+                val statusColor = when {
+                    !sale.paid -> AmberWarningLight
+                    sale.usdRefundCents > 0L -> CoralDangerLight
+                    else -> MintSuccessLight
                 }
+                Text(
+                    text = statusText,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = statusColor,
+                    softWrap = false,
+                    maxLines = 1
+                )
+                Spacer(Modifier.height(2.dp))
+                val projectedNet = Analytics.estimatedAfterTaxesAndFeesUsdCents(sale)
+                val subValue = when {
+                    !sale.paid -> "Non encaissé"
+                    sale.currency.uppercase() != currency.uppercase() -> Analytics.localMoney(originalNet, sale.currency)
+                    projectedNet != null -> "≈ " + Analytics.money(projectedNet, currency, snapshot.eurPerUsd)
+                    else -> ""
+                }
+                Text(
+                    text = subValue.ifBlank { " " },
+                    fontSize = 10.sp,
+                    color = if (subValue.startsWith("≈")) MintSuccessLight else TextMuted,
+                    softWrap = false,
+                    maxLines = 1
+                )
             }
         }
     }

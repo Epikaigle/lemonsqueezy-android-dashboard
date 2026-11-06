@@ -163,18 +163,23 @@ object Analytics {
         val amount = BigDecimal.valueOf(usdCents, 2)
             .multiply(if (target == "EUR") BigDecimal.valueOf(eurPerUsd!!) else BigDecimal.ONE)
             .setScale(2, RoundingMode.HALF_UP)
-        return NumberFormat.getCurrencyInstance(Locale.FRANCE).apply {
+        val formatted = NumberFormat.getCurrencyInstance(Locale.FRANCE).apply {
             this.currency = Currency.getInstance(target)
             maximumFractionDigits = 2
+            minimumFractionDigits = 2
         }.format(amount)
+        return formatted.replace(' ', '\u00A0').replace('\u202F', '\u00A0')
     }
 
     fun localMoney(cents: Long, currency: String): String = try {
-        NumberFormat.getCurrencyInstance(Locale.FRANCE).apply {
+        val formatted = NumberFormat.getCurrencyInstance(Locale.FRANCE).apply {
             this.currency = Currency.getInstance(currency.uppercase(Locale.ROOT))
+            maximumFractionDigits = 2
+            minimumFractionDigits = 2
         }.format(BigDecimal.valueOf(cents, 2))
+        formatted.replace(' ', '\u00A0').replace('\u202F', '\u00A0')
     } catch (_: Exception) {
-        "${BigDecimal.valueOf(cents, 2)} ${currency.uppercase(Locale.ROOT)}"
+        "${BigDecimal.valueOf(cents, 2)}\u00A0${currency.uppercase(Locale.ROOT)}"
     }
 
     data class PastPayout(
@@ -222,7 +227,7 @@ object Analytics {
         val base = kotlin.math.round(usdCents * rate).toLong()
         val min = kotlin.math.round(base * 0.96).toLong()
         val max = kotlin.math.round(base * 1.04).toLong()
-        return "${money(min, currency, eurPerUsd)} – ${money(max, currency, eurPerUsd)}"
+        return "${money(min, currency, eurPerUsd)}\u00A0–\u00A0${money(max, currency, eurPerUsd)}"
     }
 
     fun payoutEstimates(sales: List<Sale>, today: LocalDate = LocalDate.now()): PayoutEstimates {

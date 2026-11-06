@@ -64,11 +64,10 @@ class LemonMapperTest {
         }
     }
 
-    @Test fun neverCopiesPersonallyIdentifyingFields() {
-        val parsed = LemonMapper.orders(listOf(row("8")))
-        val cache = SnapshotCodec.encode(Snapshot(emptyList(), parsed, emptyList(), "2026-10-17T00:00:00Z"))
-        assertFalse(cache.contains("private@invalid.example"))
-        assertFalse(cache.contains("user_email"))
+    @Test fun capturesCustomerDetailsForSellerIdentification() {
+        val parsed = LemonMapper.orders(listOf(row("8", mapOf("user_name" to "Jean Dupont", "user_email" to "buyer@example.com"))))
+        assertEquals("Jean Dupont", parsed.single().userName)
+        assertEquals("buyer@example.com", parsed.single().userEmail)
     }
 
     @Test fun missingRequiredFinancialFieldFailsInsteadOfSilentlyRecordingZero() {

@@ -157,29 +157,10 @@ class LemonApi {
         }
         val licensesDeferred = async(Dispatchers.IO) {
             try {
-                val rawLicenses = all("license-keys", token)
-                rawLicenses.map { raw ->
-                    val a = attr(raw)
-                    LicenseKey(
-                        id = raw.getString("id"),
-                        storeId = a.idValue("store_id"),
-                        orderId = a.idValue("order_id"),
-                        orderItemId = a.idValue("order_item_id"),
-                        productId = a.idValue("product_id"),
-                        productName = a.str("product_name"),
-                        key = a.str("key"),
-                        keyShort = a.str("key_short"),
-                        status = a.str("status"),
-                        activationLimit = a.optInt("activation_limit", 0),
-                        instancesCount = a.optInt("instances_count", 0),
-                        disabled = a.optBoolean("disabled", false),
-                        createdAt = a.str("created_at"),
-                        expiresAt = a.str("expires_at")
-                    )
-                }.sortedByDescending { it.createdAt }
+                all("license-keys", token)
             } catch (e: Exception) {
                 if (e is kotlinx.coroutines.CancellationException) throw e
-                previous?.licenseKeys ?: emptyList()
+                emptyList()
             }
         }
 
@@ -219,14 +200,47 @@ class LemonApi {
                 catalogPriceCents = fixedUnitCents?.times(units),
                 catalogCurrency = storeCurrency,
                 billingInterval = price?.str("renewal_interval_unit") ?: "",
-                billingIntervalCount = price?.optInt("renewal_interval_quantity", 1) ?: 1
+                billingIntervalCount = price?.optInt("renewal_interval_quantity", 1) ?: 1,
+                userName = a.str("user_name").ifBlank { previous?.subscriptions?.firstOrNull { it.id == raw.optString("id") }?.userName.orEmpty() },
+                userEmail = a.str("user_email").ifBlank { previous?.subscriptions?.firstOrNull { it.id == raw.optString("id") }?.userEmail.orEmpty() }
             )
         }
 
         val fetchedSales = LemonMapper.orders(orders) + LemonMapper.renewalInvoices(invoices, rawSubs)
         val sales = if (full) fetchedSales else fetchedSales + previous!!.sales
 
-        val licenseKeys = licensesDeferred.await()
+        val ordersById = orders.associateBy { it.getString("id") }
+        val rawLicenses = licensesDeferred.await()
+        val licenseKeys = if (rawLicenses.isNotEmpty()) {
+            rawLicenses.map { raw ->
+                val a = attr(raw)
+                val orderId = a.idValue("order_id")
+                val orderAttr = ordersById[orderId]?.let { attr(it) }
+                val userName = a.str("user_name").ifBlank { orderAttr?.str("user_name").orEmpty() }
+                val userEmail = a.str("user_email").ifBlank { orderAttr?.str("user_email").orEmpty() }
+                LicenseKey(
+                    id = raw.getString("id"),
+                    storeId = a.idValue("store_id"),
+                    orderId = orderId,
+                    orderItemId = a.idValue("order_item_id"),
+                    productId = a.idValue("product_id"),
+                    productName = a.str("product_name"),
+                    key = a.str("key"),
+                    keyShort = a.str("key_short"),
+                    status = a.str("status"),
+                    activationLimit = a.optInt("activation_limit", 0),
+                    instancesCount = a.optInt("instances_count", 0),
+                    disabled = a.optBoolean("disabled", false),
+                    createdAt = a.str("created_at"),
+                    expiresAt = a.str("expires_at"),
+                    userName = userName,
+                    userEmail = userEmail
+                )
+            }.sortedByDescending { it.createdAt }
+        } else {
+            previous?.licenseKeys ?: emptyList()
+        }
+
         val fx = fxDeferred.await()
 
         Snapshot(

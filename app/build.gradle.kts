@@ -18,8 +18,8 @@ android {
         applicationId = "com.epikaigle.lemondashboard"
         minSdk = 33
         targetSdk = 37
-        versionCode = 14
-        versionName = "1.5.8"
+        versionCode = 15
+        versionName = "1.5.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     val keystorePropsFile = rootProject.file("keystore.properties")

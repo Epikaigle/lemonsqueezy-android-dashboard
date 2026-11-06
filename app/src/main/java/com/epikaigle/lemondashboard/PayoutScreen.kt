@@ -3,6 +3,7 @@ package com.epikaigle.lemondashboard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -25,7 +26,7 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun PayoutScreen(snapshot: Snapshot?, currency: String) {
+fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Unit = {}) {
     val uri = LocalUriHandler.current
     val today = remember { LocalDate.now() }
     val sales = snapshot?.sales.orEmpty()
@@ -38,7 +39,28 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("Versements", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Versements", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Surface(
+                color = DarkSurfaceVariant,
+                shape = RoundedCornerShape(100.dp),
+                border = BorderStroke(1.dp, DarkBorder),
+                modifier = Modifier.clickable { onOpenGlossary() }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = Lemon, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Cycle MoR (13j, 50 $)", fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
 
         // Hero Card: Prochain virement estimé
         Card(
@@ -106,7 +128,8 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String) {
 
                         Surface(
                             color = if (payoutEst.reachesThreshold) MintSuccessContainer.copy(alpha = 0.4f) else AmberWarningContainer.copy(alpha = 0.4f),
-                            shape = RoundedCornerShape(100.dp)
+                            shape = RoundedCornerShape(100.dp),
+                            modifier = Modifier.clickable { onOpenGlossary() }
                         ) {
                             Text(
                                 text = if (payoutEst.reachesThreshold) "Seuil atteint (≥ 50 $)" else "En attente seuil 50 $",

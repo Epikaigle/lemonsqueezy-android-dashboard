@@ -4,14 +4,16 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SnapshotCodecTest {
-    @Test fun survivesRoundTripAndDoesNotContainCustomerPII() {
+    @Test fun survivesRoundTripWithCustomerDetails() {
         val snapshot = Snapshot(
             listOf(Store("7", "Ma boutique")),
             listOf(Sale("order:1", "7", "Commande", "Produit", "paid", "EUR",
                 1000, 100, 1090, 109, "2026-10-16T09:00:00Z", false,
-                taxUsdCents = 180, taxName = "VAT", taxRate = 20.0, taxInclusive = true)),
+                taxUsdCents = 180, taxName = "VAT", taxRate = 20.0, taxInclusive = true,
+                userName = "Jean Dupont", userEmail = "jean@example.com")),
             listOf(Subscription("sub:1", "7", "Produit", "Mensuel", "active",
-                "2026-11-16T00:00:00Z", "", false, 1090L)),
+                "2026-11-16T00:00:00Z", "", false, 1090L,
+                userName = "Jean Dupont", userEmail = "jean@example.com")),
             "2026-10-16T20:00:00Z", 0.92, "2026-10-16", "2026-10-16T20:00:00Z",
             licenseKeys = listOf(
                 LicenseKey(
@@ -27,16 +29,21 @@ class SnapshotCodecTest {
                     disabled = false,
                     status = "active",
                     expiresAt = "2027-10-16T00:00:00Z",
-                    createdAt = "2026-10-16T09:00:00Z"
+                    createdAt = "2026-10-16T09:00:00Z",
+                    userName = "Jean Dupont",
+                    userEmail = "jean@example.com"
                 )
             )
         )
         val encoded = SnapshotCodec.encode(snapshot)
-        assertFalse(encoded.contains("user_email"))
+        assertTrue(encoded.contains("Jean Dupont"))
+        assertTrue(encoded.contains("jean@example.com"))
         val decoded = SnapshotCodec.decode(encoded)
         assertEquals(snapshot, decoded)
         assertEquals(1, decoded.licenseKeys.size)
         assertEquals("XXXX-YYYY-ZZZZ", decoded.licenseKeys.first().key)
+        assertEquals("Jean Dupont", decoded.licenseKeys.first().userName)
+        assertEquals("jean@example.com", decoded.licenseKeys.first().userEmail)
     }
 
     @Test fun oldCacheWithoutNewFieldsCanStillBeRead() {

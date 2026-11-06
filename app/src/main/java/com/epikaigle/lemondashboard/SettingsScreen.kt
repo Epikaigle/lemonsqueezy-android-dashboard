@@ -118,42 +118,82 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
             }
         }
 
-        // Export / Share Summary
+        // Export / Share Summary (Image PNG & Text)
         DashboardCard {
             Text("Partage du bilan", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
-            Spacer(Modifier.height(10.dp))
-            OutlinedButton(
-                onClick = {
-                    val mrr = Analytics.mrrEstimateUsdCents(snapshot.subscriptions)
-                    val paidSales = snapshot.sales.filter { it.paid }
-                    val totalNet = paidSales.sumOf { it.netUsd }
-                    val activeSubs = snapshot.subscriptions.count { it.status == "active" }
-                    val storeNames = snapshot.stores.joinToString { it.name }.ifBlank { "Toutes" }
-                    val summaryText = buildString {
-                        appendLine("📊 Lemon Squeezy — Bilan d'activité")
-                        appendLine("• Boutiques synchronisées : $storeNames")
-                        appendLine("• Total après remboursements (avant TVA et frais) : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
-                        appendLine("• Transactions payées : ${paidSales.size}")
-                        appendLine("• Abonnements actifs : $activeSubs")
-                        appendLine("• MRR estimé : ${Analytics.money(mrr, s.currency, snapshot.eurPerUsd)}")
-                        appendLine("• Synchronisé le : ${friendlyDateTime(snapshot.fetchedAt)}")
-                    }
-                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/plain"
-                        putExtra(Intent.EXTRA_SUBJECT, "Bilan Lemon Squeezy")
-                        putExtra(Intent.EXTRA_TEXT, summaryText)
-                    }
-                    context.startActivity(Intent.createChooser(sendIntent, "Partager le bilan"))
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp),
-                shape = RoundedCornerShape(10.dp),
-                border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+            Spacer(Modifier.height(6.dp))
+            Text("Partagez un rapport visuel élégant (image PNG) ou le texte récapitulatif de votre boutique.", fontSize = 12.sp, color = TextSecondary)
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Partager le récapitulatif", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Button(
+                    onClick = {
+                        try {
+                            val imageFile = BilanImageGenerator.generate(context, snapshot, s.currency)
+                            val contentUri = FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                imageFile
+                            )
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "image/png"
+                                putExtra(Intent.EXTRA_STREAM, contentUri)
+                                putExtra(Intent.EXTRA_SUBJECT, "Bilan Lemon Squeezy")
+                                putExtra(Intent.EXTRA_TEXT, "📊 Bilan d'activité Lemon Squeezy")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Partager l'image du bilan"))
+                        } catch (e: Exception) {
+                            Toast.makeText(context, "Erreur génération d'image : ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Lemon, contentColor = DarkBackground)
+                ) {
+                    Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Image PNG", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        val mrr = Analytics.mrrEstimateUsdCents(snapshot.subscriptions)
+                        val paidSales = snapshot.sales.filter { it.paid }
+                        val totalNet = paidSales.sumOf { it.netUsd }
+                        val activeSubs = snapshot.subscriptions.count { it.status == "active" }
+                        val storeNames = snapshot.stores.joinToString { it.name }.ifBlank { "Toutes" }
+                        val summaryText = buildString {
+                            appendLine("📊 Lemon Squeezy — Bilan d'activité")
+                            appendLine("• Boutiques synchronisées : $storeNames")
+                            appendLine("• Total après remboursements (avant TVA et frais) : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
+                            appendLine("• Transactions payées : ${paidSales.size}")
+                            appendLine("• Abonnements actifs : $activeSubs")
+                            appendLine("• MRR estimé : ${Analytics.money(mrr, s.currency, snapshot.eurPerUsd)}")
+                            appendLine("• Synchronisé le : ${friendlyDateTime(snapshot.fetchedAt)}")
+                        }
+                        val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Bilan Lemon Squeezy")
+                            putExtra(Intent.EXTRA_TEXT, summaryText)
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "Partager le bilan"))
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(44.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Lemon.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Texte", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
             }
         }
 

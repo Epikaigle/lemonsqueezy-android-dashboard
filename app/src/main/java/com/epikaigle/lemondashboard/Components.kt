@@ -124,6 +124,7 @@ fun StatCard(
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
             if (!subtitle.isNullOrBlank()) {
@@ -133,9 +134,57 @@ fun StatCard(
                     fontSize = 11.sp,
                     color = TextMuted,
                     maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun MetricCounterCard(
+    title: String,
+    value: String,
+    icon: ImageVector,
+    iconTint: Color = Lemon,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = DarkSurface),
+        border = BorderStroke(1.dp, DarkBorder)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = title,
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = value,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }
@@ -484,6 +533,24 @@ fun TransactionDetailSheet(
                 }
             }
 
+            // Customer / Buyer Information Card
+            if (sale.userName.isNotBlank() || sale.userEmail.isNotBlank()) {
+                DashboardCard(backgroundColor = DarkSurfaceVariant) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Acheteur / Client", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (sale.userName.isNotBlank()) {
+                        DetailRow("Nom", sale.userName, isBold = true)
+                    }
+                    if (sale.userEmail.isNotBlank()) {
+                        DetailRow("Email", sale.userEmail)
+                    }
+                }
+            }
+
             // Breakdown Table Card
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
                 Text("Détail financier", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
@@ -572,6 +639,9 @@ fun TransactionDetailSheet(
                         appendLine("🧾 Transaction Lemon Squeezy :")
                         appendLine("• Produit : ${sale.product}")
                         appendLine("• Référence : #${sale.id}")
+                        if (sale.userName.isNotBlank() || sale.userEmail.isNotBlank()) {
+                            appendLine("• Client : ${listOf(sale.userName, sale.userEmail).filter { it.isNotBlank() }.joinToString(" • ")}")
+                        }
                         appendLine("• Date : ${friendlyDateTime(sale.createdAt)}")
                         appendLine("• Montant après remboursements, avant TVA et frais : ${Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd)}")
                         appendLine("• Statut : ${sale.status}")
@@ -680,6 +750,24 @@ fun SubscriptionDetailSheet(
                 }
             }
 
+            // Customer / Subscriber Information Card
+            if (sub.userName.isNotBlank() || sub.userEmail.isNotBlank()) {
+                DashboardCard(backgroundColor = DarkSurfaceVariant) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Abonné / Client", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (sub.userName.isNotBlank()) {
+                        DetailRow("Nom", sub.userName, isBold = true)
+                    }
+                    if (sub.userEmail.isNotBlank()) {
+                        DetailRow("Email", sub.userEmail)
+                    }
+                }
+            }
+
             // Details Table
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
                 Text("Échéances et tarification", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
@@ -735,12 +823,19 @@ fun DetailRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(text = label, color = TextSecondary, fontSize = 13.sp)
+        Text(
+            text = label,
+            color = TextSecondary,
+            fontSize = 13.sp,
+            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
+        )
         Text(
             text = value,
             color = valueColor,
             fontSize = 13.sp,
-            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal
+            fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
+            softWrap = false,
+            maxLines = 1
         )
     }
 }
@@ -861,6 +956,21 @@ fun LicenseKeyCard(
                     )
                 }
                 StatusBadge(license.status)
+            }
+
+            if (license.userName.isNotBlank() || license.userEmail.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = listOf(license.userName, license.userEmail).filter { it.isNotBlank() }.joinToString(" • "),
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             Spacer(Modifier.height(10.dp))
@@ -1008,6 +1118,9 @@ fun LicenseKeyDetailSheet(
                             val shareText = buildString {
                                 appendLine("🔑 Clé de licence : ${license.productName.ifBlank { "Logiciel" }}")
                                 appendLine(license.key)
+                                if (license.userName.isNotBlank() || license.userEmail.isNotBlank()) {
+                                    appendLine("Titulaire : ${listOf(license.userName, license.userEmail).filter { it.isNotBlank() }.joinToString(" • ")}")
+                                }
                                 if (license.expiresAt.isNotBlank()) {
                                     appendLine("Date d'expiration : ${friendlyDate(license.expiresAt)}")
                                 }
@@ -1029,6 +1142,24 @@ fun LicenseKeyDetailSheet(
                         Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                         Text("Partager", color = Lemon, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            // Customer / License Holder Card
+            if (license.userName.isNotBlank() || license.userEmail.isNotBlank()) {
+                DashboardCard(backgroundColor = DarkSurfaceVariant) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Titulaire de la licence", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    if (license.userName.isNotBlank()) {
+                        DetailRow("Nom de l'acheteur", license.userName, isBold = true)
+                    }
+                    if (license.userEmail.isNotBlank()) {
+                        DetailRow("Email", license.userEmail)
                     }
                 }
             }
@@ -1348,3 +1479,183 @@ fun friendlyDateTime(iso: String): String = try {
     val dt = java.time.Instant.parse(iso).atZone(java.time.ZoneId.systemDefault())
     dt.format(DateTimeFormatter.ofPattern("dd MMM à HH:mm", Locale.FRANCE))
 } catch (_: Exception) { "jamais" }
+
+data class GlossaryTerm(
+    val badge: String,
+    val badgeColor: Color,
+    val title: String,
+    val description: String
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GlossarySheet(onDismiss: () -> Unit) {
+    val terms = remember {
+        listOf(
+            GlossaryTerm(
+                badge = "MoR",
+                badgeColor = Lemon,
+                title = "Merchant of Record (Marchand de référence)",
+                description = "Lemon Squeezy agit comme revendeur officiel et légal de vos produits. Ils encaissent vos clients mondiaux, calculent et reversent automatiquement la TVA et taxes locales, gèrent la conformité et les contestations bancaires, puis vous reversent votre revenu net après une rétention de sécurité."
+            ),
+            GlossaryTerm(
+                badge = "13 jours",
+                badgeColor = AmberWarningLight,
+                title = "Période de rétention de sécurité",
+                description = "Délai de réserve obligatoire appliqué par Lemon Squeezy après chaque vente avant que les fonds ne soient éligibles au versement. Cette retenue garantit la couverture des contestations bancaires et demandes de remboursement."
+            ),
+            GlossaryTerm(
+                badge = "≥ 50 $",
+                badgeColor = MintSuccessLight,
+                title = "Seuil minimum de versement bancaire",
+                description = "Lemon Squeezy déclenche un virement bancaire automatique uniquement si votre solde disponible atteint au moins 50 $ lors des clôtures de cycle (1er et 15 du mois). En dessous de ce seuil, les fonds restent en réserve et s'accumulent."
+            ),
+            GlossaryTerm(
+                badge = "14 & 28",
+                badgeColor = MintSuccessLight,
+                title = "Dates des virements bancaires",
+                description = "Lemon Squeezy émet les ordres de virement deux fois par mois : le 14 (pour les ventes validées au 1er) et le 28 (pour les ventes validées au 15). Les fonds arrivent sur votre compte sous 1 à 3 jours ouvrés."
+            ),
+            GlossaryTerm(
+                badge = "MRR",
+                badgeColor = PurpleAccent,
+                title = "Monthly Recurring Revenue (Revenu Mensuel Récurrent)",
+                description = "Revenu normalisé sur 30 jours généré par l'ensemble de vos abonnements actifs. Par exemple, un abonnement annuel vendu 120 € contribue à hauteur de 10 € / mois à votre MRR."
+            ),
+            GlossaryTerm(
+                badge = "ARR",
+                badgeColor = PurpleAccent,
+                title = "Annual Recurring Revenue (Revenu Annuel Récurrent)",
+                description = "Projection annuelle de vos abonnements récurrents actuels (MRR × 12 mois), en supposant que le parc d'abonnés reste stable sur une année."
+            ),
+            GlossaryTerm(
+                badge = "Quick Ratio",
+                badgeColor = MintSuccessLight,
+                title = "Indicateur de santé de croissance SaaS",
+                description = "Mesure le rapport entre les nouveaux revenus récurrents gagnés et les revenus perdus par résiliation (churn). Un score supérieur à 4,0 indique une excellente croissance saine ; entre 1,0 et 4,0 une croissance modérée ; inférieur à 1,0 une attrition nette."
+            ),
+            GlossaryTerm(
+                badge = "Churn",
+                badgeColor = CoralDangerLight,
+                title = "Taux de Churn (Attrition / Résiliation)",
+                description = "Pourcentage d'abonnés ayant résilié ou non renouvelé leur abonnement au cours de la période. Un taux faible (< 5 %) témoigne d'une excellente rétention."
+            ),
+            GlossaryTerm(
+                badge = "AOV",
+                badgeColor = Lemon,
+                title = "Average Order Value (Panier Moyen)",
+                description = "Montant moyen payé par commande sur la période sélectionnée (Chiffre d'affaires net divisé par le nombre de transactions)."
+            ),
+            GlossaryTerm(
+                badge = "Pending",
+                badgeColor = AmberWarningLight,
+                title = "En attente / Non encaissé",
+                description = "Désigne un paiement client en cours de confirmation bancaire, ou un montant en cours de rétention de sécurité (13 jours) avant d'être libéré pour votre prochain virement."
+            ),
+            GlossaryTerm(
+                badge = "TVA",
+                badgeColor = TextSecondary,
+                title = "TVA & Taxes locales",
+                description = "Taxe sur la valeur ajoutée perçue auprès du client final selon son pays. En tant que MoR, Lemon Squeezy collecte et reverse directement cette TVA aux autorités fiscales locales."
+            )
+        )
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurface,
+        scrimColor = Color.Black.copy(alpha = 0.65f),
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp)
+                .navigationBarsPadding()
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Lemon.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Info, contentDescription = null, tint = Lemon, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Glossaire & Définitions", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Comprendre les sigles et règles financières de Lemon Squeezy", fontSize = 11.sp, color = TextSecondary)
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            terms.forEach { term ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = DarkSurfaceVariant),
+                    border = BorderStroke(1.dp, DarkBorder)
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = term.title,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = TextPrimary,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                color = term.badgeColor.copy(alpha = 0.15f),
+                                shape = RoundedCornerShape(6.dp),
+                                border = BorderStroke(1.dp, term.badgeColor.copy(alpha = 0.35f))
+                            ) {
+                                Text(
+                                    text = term.badge,
+                                    color = term.badgeColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = term.description,
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(4.dp))
+
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceContainerHigh)
+            ) {
+                Text("Compris", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}

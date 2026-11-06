@@ -76,6 +76,8 @@ private fun LemonApp(vm: DashboardViewModel) {
         vm.tab(0)
     }
 
+    var showGlossary by remember { mutableStateOf(false) }
+
     Scaffold(
         containerColor = DarkBackground,
         topBar = {
@@ -85,7 +87,8 @@ private fun LemonApp(vm: DashboardViewModel) {
                     lastSync = s.snapshot?.fetchedAt.orEmpty(),
                     onRefresh = vm::refresh,
                     hasUpdate = s.updateStatus is UpdateStatus.Available,
-                    onOpenUpdate = vm::showUpdateDialog
+                    onOpenUpdate = vm::showUpdateDialog,
+                    onOpenGlossary = { showGlossary = true }
                 )
             }
         },
@@ -207,8 +210,8 @@ private fun LemonApp(vm: DashboardViewModel) {
                         when (s.tab) {
                             0 -> OverviewScreen(snapshot, filteredSales, filteredSubs, s, vm)
                             1 -> SalesScreen(snapshot, filteredSales, s, vm)
-                            2 -> SubscriptionsScreen(snapshot, filteredSubs, s, vm)
-                            3 -> PayoutScreen(snapshot, s.currency)
+                            2 -> SubscriptionsScreen(snapshot, filteredSubs, s, vm, onOpenGlossary = { showGlossary = true })
+                            3 -> PayoutScreen(snapshot, s.currency, onOpenGlossary = { showGlossary = true })
                             else -> SettingsScreen(snapshot, s, vm)
                         }
                     }
@@ -219,6 +222,10 @@ private fun LemonApp(vm: DashboardViewModel) {
 
     if (s.showUpdateDialog) {
         InAppUpdateDialog(vm, s)
+    }
+
+    if (showGlossary) {
+        GlossarySheet(onDismiss = { showGlossary = false })
     }
 }
 
@@ -235,7 +242,8 @@ private fun Header(
     lastSync: String,
     onRefresh: () -> Unit,
     hasUpdate: Boolean = false,
-    onOpenUpdate: () -> Unit = {}
+    onOpenUpdate: () -> Unit = {},
+    onOpenGlossary: () -> Unit = {}
 ) {
     // Rotation animation when syncing
     val infiniteTransition = rememberInfiniteTransition(label = "refreshRotation")
@@ -292,10 +300,22 @@ private fun Header(
                 )
             }
 
+            IconButton(
+                onClick = onOpenGlossary,
+                modifier = Modifier.size(38.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Glossaire des sigles",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(21.dp)
+                )
+            }
+
             if (hasUpdate) {
                 IconButton(
                     onClick = onOpenUpdate,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(38.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.NewReleases,
@@ -309,7 +329,7 @@ private fun Header(
             IconButton(
                 onClick = onRefresh,
                 enabled = !busy,
-                modifier = Modifier.size(40.dp)
+                modifier = Modifier.size(38.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,

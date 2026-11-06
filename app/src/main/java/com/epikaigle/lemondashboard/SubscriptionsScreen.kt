@@ -34,7 +34,8 @@ fun SubscriptionsScreen(
     snapshot: Snapshot,
     subscriptions: List<Subscription>,
     s: UiState,
-    vm: DashboardViewModel
+    vm: DashboardViewModel,
+    onOpenGlossary: () -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     var activeSubTab by remember { mutableIntStateOf(0) }
@@ -163,7 +164,9 @@ fun SubscriptionsScreen(
             // SaaS MRR & ARR Hero Card
             item {
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenGlossary() },
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = DarkSurface),
                     border = BorderStroke(1.dp, DarkBorder)
@@ -180,13 +183,22 @@ fun SubscriptionsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = "REVENU RÉCURRENT MENSUEL (MRR)",
-                                    color = Color(0xFFC4B5FD),
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.sp
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = "REVENU RÉCURRENT MENSUEL (MRR)",
+                                        color = Color(0xFFC4B5FD),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = "Définition MRR",
+                                        tint = Color(0xFFC4B5FD).copy(alpha = 0.7f),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
                                 Surface(
                                     color = PurpleAccent.copy(alpha = 0.2f),
                                     shape = RoundedCornerShape(100.dp)
@@ -222,14 +234,18 @@ fun SubscriptionsScreen(
                         value = String.format(Locale.US, "%.1f%%", churnRate),
                         icon = Icons.Default.TrendingDown,
                         iconTint = if (churnRate > 5.0) CoralDangerLight else MintSuccessLight,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpenGlossary() }
                     )
                     StatCard(
                         title = "Quick Ratio",
                         value = String.format(Locale.US, "%.1f", quickRatio),
                         icon = Icons.Default.Speed,
                         iconTint = if (quickRatio >= 4.0) MintSuccessLight else if (quickRatio >= 1.0) AmberWarningLight else CoralDangerLight,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpenGlossary() }
                     )
                 }
             }
@@ -265,24 +281,24 @@ fun SubscriptionsScreen(
                 }
             }
 
-            // Subscriptions Count Row
+            // Subscriptions Count Row (Responsive 3-column metric cards)
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatCard(
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetricCounterCard(
                         title = "Actifs",
                         value = (counts["active"] ?: 0).toString(),
                         icon = Icons.Default.CheckCircle,
                         iconTint = MintSuccessLight,
                         modifier = Modifier.weight(1f)
                     )
-                    StatCard(
+                    MetricCounterCard(
                         title = "En essai",
                         value = (counts["on_trial"] ?: 0).toString(),
                         icon = Icons.Default.HourglassTop,
                         iconTint = AmberWarningLight,
                         modifier = Modifier.weight(1f)
                     )
-                    StatCard(
+                    MetricCounterCard(
                         title = "Résiliés",
                         value = (subscriptions.size - (counts["active"] ?: 0) - (counts["on_trial"] ?: 0)).toString(),
                         icon = Icons.Default.Cancel,
@@ -390,21 +406,28 @@ fun SubscriptionsScreen(
             val disabledLicCount = licenseKeys.count { it.status == "disabled" || it.disabled }
             val activeInstancesCount = licenseKeys.sumOf { it.instancesCount }
 
-            // KPI row for licenses
+            // KPI row for licenses (Responsive 3-column metric cards)
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    StatCard(
-                        title = "Licences actives",
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetricCounterCard(
+                        title = "Actives",
                         value = activeLicCount.toString(),
                         icon = Icons.Default.VpnKey,
                         iconTint = MintSuccessLight,
                         modifier = Modifier.weight(1f)
                     )
-                    StatCard(
-                        title = "Postes activés",
+                    MetricCounterCard(
+                        title = "Postes",
                         value = activeInstancesCount.toString(),
                         icon = Icons.Default.Devices,
                         iconTint = Lemon,
+                        modifier = Modifier.weight(1f)
+                    )
+                    MetricCounterCard(
+                        title = "Inactives",
+                        value = (expiredLicCount + disabledLicCount).toString(),
+                        icon = Icons.Default.TimerOff,
+                        iconTint = AmberWarningLight,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -562,6 +585,22 @@ fun SubscriptionItemCard(
                 Text(sub.variant, color = TextSecondary, fontSize = 11.sp)
             }
 
+            val customer = listOf(sub.userName, sub.userEmail).filter { it.isNotBlank() }.joinToString(" • ")
+            if (customer.isNotBlank()) {
+                Spacer(Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = customer,
+                        fontSize = 11.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
 
             if (sub.renewsAt.isNotBlank() && sub.status !in setOf("cancelled", "expired")) {
@@ -584,7 +623,7 @@ fun SubscriptionItemCard(
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -598,17 +637,21 @@ fun SubscriptionItemCard(
                     }
                     val frequency = if (interval.isBlank()) "" else " / ${if (sub.billingIntervalCount > 1) "${sub.billingIntervalCount} " else ""}$interval"
                     Text(
-                        "${Analytics.localMoney(sub.catalogPriceCents, sub.catalogCurrency)}$frequency",
+                        text = "${Analytics.localMoney(sub.catalogPriceCents, sub.catalogCurrency)}$frequency",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Lemon
+                        color = Lemon,
+                        softWrap = false,
+                        maxLines = 1
                     )
                 }
                 if (sub.lastInvoiceUsdCents != null) {
                     Text(
-                        "Dernière facture : ${Analytics.money(sub.lastInvoiceUsdCents, currency, snapshot.eurPerUsd)}",
+                        text = "Payé : ${Analytics.money(sub.lastInvoiceUsdCents, currency, snapshot.eurPerUsd)}",
                         color = TextSecondary,
-                        fontSize = 11.sp
+                        fontSize = 11.sp,
+                        softWrap = false,
+                        maxLines = 1
                     )
                 }
             }
