@@ -26,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.rememberScrollState
@@ -120,7 +121,9 @@ private fun LemonApp(vm: DashboardViewModel) {
                                 Text(
                                     text = item.name,
                                     maxLines = 1,
-                                    fontSize = 11.sp,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis,
+                                    fontSize = 10.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )
                             },
@@ -208,10 +211,10 @@ private fun LemonApp(vm: DashboardViewModel) {
                     }
                     Box(modifier = Modifier.fillMaxSize()) {
                         when (s.tab) {
-                            0 -> OverviewScreen(snapshot, filteredSales, filteredSubs, s, vm)
+                            0 -> OverviewScreen(snapshot, filteredSales, filteredSubs, s, vm, onOpenGlossary = { showGlossary = true })
                             1 -> SalesScreen(snapshot, filteredSales, s, vm)
                             2 -> SubscriptionsScreen(snapshot, filteredSubs, s, vm, onOpenGlossary = { showGlossary = true })
-                            3 -> PayoutScreen(snapshot, s.currency, onOpenGlossary = { showGlossary = true })
+                            3 -> PayoutScreen(snapshot, filteredSales, s, vm, onOpenGlossary = { showGlossary = true })
                             else -> SettingsScreen(snapshot, s, vm)
                         }
                     }
@@ -286,17 +289,28 @@ private fun Header(
 
             Spacer(Modifier.width(10.dp))
 
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).padding(end = 6.dp)) {
                 Text(
                     text = "Lemon Dashboard",
                     fontWeight = FontWeight.Bold,
                     fontSize = 17.sp,
-                    color = TextPrimary
+                    color = TextPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
+                val syncText = when {
+                    busy && lastSync.isBlank() -> "Synchronisation en cours…"
+                    lastSync.isBlank() -> "En attente de synchronisation"
+                    else -> "Mis à jour • ${friendlyDateTime(lastSync)}"
+                }
                 Text(
-                    text = "Synchronisé le ${friendlyDateTime(lastSync)}",
+                    text = syncText,
                     color = TextSecondary,
-                    fontSize = 11.sp
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -412,6 +426,7 @@ private fun InAppUpdateDialog(vm: DashboardViewModel, s: UiState) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .heightIn(max = 320.dp)
                             .verticalScroll(rememberScrollState()),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -20,8 +21,10 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -64,7 +67,16 @@ fun LoginScreen(loading: Boolean, onConnect: (String) -> Unit) {
             color = TextPrimary
         )
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            text = "Vos ventes. Vos licences. Vos versements.",
+            fontSize = 13.sp,
+            color = TextSecondary,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(Modifier.height(22.dp))
 
         // Input Card
         DashboardCard(backgroundColor = DarkSurfaceVariant) {
@@ -85,7 +97,8 @@ fun LoginScreen(loading: Boolean, onConnect: (String) -> Unit) {
                 placeholder = { Text("Collez votre clé ici", color = TextMuted, fontSize = 14.sp) },
                 singleLine = true,
                 visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false),
+                keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { if (token.isNotBlank() && !loading) onConnect(token) }),
                 leadingIcon = {
                     Icon(Icons.Default.VpnKey, contentDescription = null, tint = TextMuted, modifier = Modifier.size(18.dp))
                 },
@@ -147,12 +160,23 @@ fun LoginScreen(loading: Boolean, onConnect: (String) -> Unit) {
                 } else {
                     Icon(Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Se connecter", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Connecter ma boutique", fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 }
             }
         }
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
+
+        Text(
+            text = "🔒 Votre clé est chiffrée localement (AES-256) sur cet appareil et n'est jamais partagée.",
+            fontSize = 11.sp,
+            color = TextMuted,
+            textAlign = TextAlign.Center,
+            lineHeight = 16.sp,
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
+
+        Spacer(Modifier.height(10.dp))
 
         TextButton(
             onClick = { uri.openUri("https://app.lemonsqueezy.com/settings/api") },

@@ -40,10 +40,13 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
         sales.filter { Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, today) }
     }
     val rows = remember(inPeriod, query, filter) {
+        val q = query.trim()
         inPeriod.filter { sale ->
-            (query.isBlank() || sale.product.contains(query.trim(), ignoreCase = true) ||
-                sale.id.contains(query.trim(), ignoreCase = true) ||
-                sale.source.contains(query.trim(), ignoreCase = true)) &&
+            (q.isBlank() || sale.product.contains(q, ignoreCase = true) ||
+                sale.id.contains(q, ignoreCase = true) ||
+                sale.source.contains(q, ignoreCase = true) ||
+                sale.userName.contains(q, ignoreCase = true) ||
+                sale.userEmail.contains(q, ignoreCase = true)) &&
                 when (filter) {
                     1 -> sale.paid && sale.usdRefundCents == 0L
                     2 -> sale.usdRefundCents > 0L
@@ -74,23 +77,50 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
         item {
             val paid = inPeriod.filter { it.paid }
             val knownTaxes = paid.mapNotNull { it.taxUsdCents }
+            val refundTotal = paid.sumOf { it.usdRefundCents }
             val fees = paid.mapNotNull(Analytics::estimatedPlatformFeeUsdCents)
-            val projected = paid.mapNotNull(Analytics::estimatedAfterTaxesAndFeesUsdCents)
+            val pocketNetTotal = paid.sumOf { Analytics.realPocketNetUsdCents(it) }
             DashboardCard {
-                Text("Détail financier de la période", fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text("Résumé financier (${s.period.title})", fontWeight = FontWeight.Bold, color = TextPrimary)
                 Spacer(Modifier.height(8.dp))
-                DetailRow("Total facturé", Analytics.money(paid.sumOf { it.usdCents }, s.currency, snapshot.eurPerUsd))
-                DetailRow("TVA / taxes initiales (" + knownTaxes.size + "/" + paid.size + " connues)",
-                    Analytics.money(knownTaxes.sum(), s.currency, snapshot.eurPerUsd))
-                DetailRow("Frais plateforme de base estimés",
-                    "≈ " + Analytics.money(fees.sum(), s.currency, snapshot.eurPerUsd))
-                if (projected.isNotEmpty()) {
-                    DetailRow("Après TVA/frais, sans remboursement (" + projected.size + " ventes)",
-                        "≈ " + Analytics.money(projected.sum(), s.currency, snapshot.eurPerUsd),
-                        isBold = true)
+                DetailRow("Total facturé (TTC)", Analytics.money(paid.sumOf { it.usdCents }, s.currency, snapshot.eurPerUsd))
+                if (knownTaxes.isNotEmpty()) {
+                    val taxLabel = if (knownTaxes.size < paid.size) {
+                        "TVA collectée (${knownTaxes.size}/${paid.size})"
+                    } else {
+                        "TVA collectée (MoR)"
+                    }
+                    DetailRow(
+                        taxLabel,
+                        "- " + Analytics.money(knownTaxes.sum(), s.currency, snapshot.eurPerUsd),
+                        valueColor = TextSecondary
+                    )
                 }
-                Text("Estimations indicatives, hors frais supplémentaires et ajustements de remboursement non accessibles via l’API.",
-                    fontSize = 11.sp, color = TextMuted)
+                if (refundTotal > 0L) {
+                    DetailRow(
+                        "Remboursements",
+                        "- " + Analytics.money(refundTotal, s.currency, snapshot.eurPerUsd),
+                        valueColor = CoralDangerLight
+                    )
+                }
+                DetailRow(
+                    "Frais MoR estimés",
+                    "- ≈\u00A0" + Analytics.money(fees.sum(), s.currency, snapshot.eurPerUsd),
+                    valueColor = TextSecondary
+                )
+                HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 8.dp))
+                DetailRow(
+                    "Net estimé en poche",
+                    "≈\u00A0" + Analytics.money(pocketNetTotal, s.currency, snapshot.eurPerUsd),
+                    isBold = true,
+                    valueColor = MintSuccessLight
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Estimation nette après TVA, commission Lemon Squeezy et virement.",
+                    fontSize = 11.sp,
+                    color = TextMuted
+                )
             }
         }
 
@@ -101,7 +131,7 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                 onValueChange = { query = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                placeholder = { Text("Rechercher un produit, référence...", color = TextMuted, fontSize = 14.sp) },
+                placeholder = { Text("Produit, client, email ou référence…", color = TextMuted, fontSize = 14.sp) },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                 trailingIcon = {
                     if (query.isNotEmpty()) {
@@ -172,7 +202,7 @@ fun SalesScreen(snapshot: Snapshot, sales: List<Sale>, s: UiState, vm: Dashboard
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("${sortedRows.size} résultat(s)", color = TextSecondary, fontSize = 12.sp)
+                Text(pluralFr(sortedRows.size, "résultat"), color = TextSecondary, fontSize = 12.sp)
                 Surface(
                     color = if (sortByAmountDesc) LemonContainer else DarkSurfaceVariant,
                     shape = RoundedCornerShape(8.dp),
@@ -316,7 +346,7 @@ fun SaleItemCard(
                 )
                 Spacer(Modifier.height(2.dp))
                 val statusText = when {
-                    !sale.paid -> if (sale.status == "pending") "En attente" else sale.status.replaceFirstChar { it.uppercase() }
+                    !sale.paid -> frenchStatusLabel(sale.status)
                     sale.usdRefundCents > 0L -> "Remboursé"
                     else -> "Payé"
                 }
@@ -334,11 +364,11 @@ fun SaleItemCard(
                     maxLines = 1
                 )
                 Spacer(Modifier.height(2.dp))
-                val projectedNet = Analytics.estimatedAfterTaxesAndFeesUsdCents(sale)
+                val projectedNet = if (sale.paid && sale.usdRefundCents == 0L) Analytics.realPocketNetUsdCents(sale) else null
                 val subValue = when {
                     !sale.paid -> "Non encaissé"
                     sale.currency.uppercase() != currency.uppercase() -> Analytics.localMoney(originalNet, sale.currency)
-                    projectedNet != null -> "≈ " + Analytics.money(projectedNet, currency, snapshot.eurPerUsd)
+                    projectedNet != null -> "≈\u00A0" + Analytics.money(projectedNet, currency, snapshot.eurPerUsd)
                     else -> ""
                 }
                 Text(

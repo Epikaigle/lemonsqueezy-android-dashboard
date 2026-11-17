@@ -84,7 +84,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     fun connect(raw: String) {
         val token = raw.trim()
         if (token.isEmpty()) {
-            state = state.copy(error = "Saisis une clé API.")
+            state = state.copy(error = "Veuillez saisir une clé API.")
             return
         }
         if (state.loading) return
@@ -123,7 +123,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             } catch (e: Exception) {
                 if (expected == generation) {
                     state = state.copy(loading = false, progress = "",
-                        error = e.message ?: "Connexion impossible. Vérifie ton réseau et ta clé API.")
+                        error = e.message ?: "Connexion impossible. Vérifiez votre réseau et votre clé API.")
                 }
             }
         }
@@ -135,7 +135,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private fun startRefresh(forceFull: Boolean, isSilent: Boolean = false) {
         if (state.loading) return
         val token = secure.readToken() ?: run {
-            state = state.copy(connected = false, error = "Clé introuvable, reconnecte-toi.")
+            state = state.copy(connected = false, error = "Clé introuvable, veuillez vous reconnecter.")
             return
         }
         val expected = generation
@@ -235,7 +235,7 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
                 if (error is CancellationException) throw error
                 if (expected == generation) state = state.copy(pushBusy = false, pushMessage =
                     "Désactivation distante impossible : " +
-                        (error.message ?: "vérifie la connexion."))
+                        (error.message ?: "vérifiez la connexion."))
             }
         }
     }

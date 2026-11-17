@@ -30,6 +30,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
+import java.util.Locale
 
 @Composable
 fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
@@ -42,7 +43,7 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Text("Réglages", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
@@ -84,6 +85,14 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                     )
                 )
             }
+            if (s.currency == "EUR" && snapshot.eurPerUsd != null) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Taux BCE appliqué : 1\u00A0$ = ${String.format(Locale.FRANCE, "%.4f", snapshot.eurPerUsd)}\u00A0€",
+                    fontSize = 11.sp,
+                    color = TextMuted
+                )
+            }
         }
 
         // Push Notifications
@@ -96,10 +105,17 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
         DashboardCard {
             Text("Synchronisation & Cache", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
             Spacer(Modifier.height(8.dp))
-            DetailRow("Dernière synchronisation", friendlyDateTime(snapshot.fetchedAt))
-            DetailRow("Dernier rapprochement complet", friendlyDateTime(snapshot.lastFullSyncAt))
-            DetailRow("Commandes en cache", "${snapshot.sales.size} transactions")
-            DetailRow("Abonnements en cache", "${snapshot.subscriptions.size} abonnements")
+            DetailRow(
+                "Dernière synchronisation",
+                if (snapshot.fetchedAt.isBlank()) "Aucune" else friendlyDateTime(snapshot.fetchedAt)
+            )
+            DetailRow(
+                "Dernier rapprochement complet",
+                if (snapshot.lastFullSyncAt.isBlank()) "Jamais" else friendlyDateTime(snapshot.lastFullSyncAt)
+            )
+            DetailRow("Transactions en cache", pluralFr(snapshot.sales.size, "transaction"))
+            DetailRow("Abonnements en cache", pluralFr(snapshot.subscriptions.size, "abonnement"))
+            DetailRow("Licences en cache", pluralFr(snapshot.licenseKeys.size, "licence"))
 
             Spacer(Modifier.height(10.dp))
 
@@ -132,7 +148,7 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                 Button(
                     onClick = {
                         try {
-                            val imageFile = BilanImageGenerator.generate(context, snapshot, s.currency)
+                            val imageFile = BilanImageGenerator.generate(context, snapshot, s.currency, s.selectedStore)
                             val contentUri = FileProvider.getUriForFile(
                                 context,
                                 "${context.packageName}.fileprovider",
@@ -158,20 +174,26 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                 ) {
                     Icon(Icons.Default.Image, contentDescription = null, modifier = Modifier.size(17.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Image PNG", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Image PNG", fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
                 }
 
                 OutlinedButton(
                     onClick = {
-                        val mrr = Analytics.mrrEstimateUsdCents(snapshot.subscriptions)
-                        val paidSales = snapshot.sales.filter { it.paid }
+                        val filteredSales = Analytics.selectedSales(snapshot, s.selectedStore)
+                        val filteredSubs = Analytics.selectedSubscriptions(snapshot, s.selectedStore)
+                        val mrr = Analytics.mrrEstimateUsdCents(filteredSubs)
+                        val paidSales = filteredSales.filter { it.paid }
                         val totalNet = paidSales.sumOf { it.netUsd }
-                        val activeSubs = snapshot.subscriptions.count { it.status == "active" }
-                        val storeNames = snapshot.stores.joinToString { it.name }.ifBlank { "Toutes" }
+                        val activeSubs = filteredSubs.count { it.status == "active" }
+                        val storeNames = if (s.selectedStore.isNotBlank()) {
+                            snapshot.stores.firstOrNull { it.id == s.selectedStore }?.name ?: "Boutique sélectionnée"
+                        } else {
+                            snapshot.stores.joinToString { it.name }.ifBlank { "Toutes" }
+                        }
                         val summaryText = buildString {
                             appendLine("📊 Lemon Squeezy — Bilan d'activité")
                             appendLine("• Boutiques synchronisées : $storeNames")
-                            appendLine("• Total après remboursements (avant TVA et frais) : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
+                            appendLine("• Total net (après remboursements) : ${Analytics.money(totalNet, s.currency, snapshot.eurPerUsd)}")
                             appendLine("• Transactions payées : ${paidSales.size}")
                             appendLine("• Abonnements actifs : $activeSubs")
                             appendLine("• MRR estimé : ${Analytics.money(mrr, s.currency, snapshot.eurPerUsd)}")
@@ -192,7 +214,7 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
                 ) {
                     Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(17.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Texte", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text("Texte", color = Lemon, fontWeight = FontWeight.Bold, fontSize = 13.sp, maxLines = 1, softWrap = false)
                 }
             }
         }
@@ -255,7 +277,13 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
 
         // Security & Disconnect
         DashboardCard {
-            Text("Zone de déconnexion", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Text("Compte & Sécurité", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Clé API et cache protégés par chiffrement local AES-256.",
+                fontSize = 11.sp,
+                color = TextMuted
+            )
             Spacer(Modifier.height(10.dp))
 
             Button(
@@ -306,10 +334,8 @@ fun SettingsScreen(snapshot: Snapshot, s: UiState, vm: DashboardViewModel) {
 @Composable
 fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
     val context = LocalContext.current
-    var showAdvanced by remember { mutableStateOf(false) }
-    var origin by remember { mutableStateOf(s.pushOrigin.ifBlank { PushNotifications.DEFAULT_ORIGIN }) }
-    var pairingSecret by remember { mutableStateOf(PushNotifications.DEFAULT_SECRET) }
-    var reveal by remember { mutableStateOf(false) }
+    val origin = s.pushOrigin.ifBlank { PushNotifications.DEFAULT_ORIGIN }
+    val pairingSecret = PushNotifications.DEFAULT_SECRET
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -323,7 +349,7 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Icon(
                     Icons.Default.NotificationsActive,
                     contentDescription = null,
@@ -331,7 +357,13 @@ fun PushSettingsCard(vm: DashboardViewModel, s: UiState) {
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(Modifier.width(8.dp))
-                Text("Notifications instantanées", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+                Text(
+                    "Notifications instantanées",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 15.sp,
+                    color = TextPrimary,
+                    maxLines = 1
+                )
             }
             if (s.pushEnabled) {
                 Surface(

@@ -19,6 +19,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
@@ -26,17 +27,22 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 @Composable
-fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Unit = {}) {
+fun PayoutScreen(
+    snapshot: Snapshot,
+    sales: List<Sale>,
+    s: UiState,
+    vm: DashboardViewModel,
+    onOpenGlossary: () -> Unit = {}
+) {
     val uri = LocalUriHandler.current
     val today = remember { LocalDate.now() }
-    val sales = snapshot?.sales.orEmpty()
-    val payoutEst = remember(sales) { Analytics.payoutEstimates(sales, today) }
+    val payoutEst = remember(sales, today) { Analytics.payoutEstimates(sales, today) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         Row(
@@ -57,10 +63,12 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                 ) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = Lemon, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Cycle MoR (13j, 50 $)", fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
+                    Text("Cycle MoR (13j, 50\u00A0$)", fontSize = 11.sp, color = TextSecondary, fontWeight = FontWeight.Medium, softWrap = false)
                 }
             }
         }
+
+        StoreChips(snapshot, s.selectedStore, vm::store)
 
         // Hero Card: Prochain virement estimé
         Card(
@@ -86,17 +94,22 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                             color = MintSuccessLight,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp
+                            letterSpacing = 0.8.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                         )
                         Surface(
                             color = MintSuccessContainer.copy(alpha = 0.5f),
                             shape = RoundedCornerShape(100.dp)
                         ) {
                             Text(
-                                text = "Dans ${payoutEst.daysUntilNextPayout} jour(s)",
+                                text = daysUntilLabel(payoutEst.daysUntilNextPayout),
                                 color = MintSuccessLight,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                softWrap = false,
+                                maxLines = 1,
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
@@ -105,13 +118,26 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        text = Analytics.moneyRange(payoutEst.pocketNextPayoutUsdCents, currency, snapshot?.eurPerUsd),
-                        fontSize = 28.sp,
+                        text = Analytics.moneyRange(payoutEst.pocketNextPayoutUsdCents, s.currency, snapshot.eurPerUsd),
+                        fontSize = 26.sp,
                         fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
 
-                    Spacer(Modifier.height(6.dp))
+                    Spacer(Modifier.height(4.dp))
+
+                    Text(
+                        text = "Net en poche après TVA, frais MoR et virement (1\u00A0%)",
+                        fontSize = 11.sp,
+                        color = TextMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(Modifier.height(8.dp))
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -119,11 +145,14 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = payoutEst.nextPayoutDate.format(DateTimeFormatter.ofPattern("EEEE dd MMMM yyyy", Locale.FRANCE))
+                            text = payoutEst.nextPayoutDate.format(DateTimeFormatter.ofPattern("EEE dd MMM yyyy", Locale.FRANCE))
                                 .replaceFirstChar { it.uppercase() },
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
-                            color = TextSecondary
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                         )
 
                         Surface(
@@ -132,11 +161,13 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                             modifier = Modifier.clickable { onOpenGlossary() }
                         ) {
                             Text(
-                                text = if (payoutEst.reachesThreshold) "Seuil atteint (≥ 50 $)" else "En attente seuil 50 $",
+                                text = if (payoutEst.reachesThreshold) "Seuil atteint (≥ 50\u00A0$)" else "En attente seuil 50\u00A0$",
                                 color = if (payoutEst.reachesThreshold) MintSuccessLight else AmberWarningLight,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                softWrap = false,
+                                maxLines = 1,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                             )
                         }
                     }
@@ -146,25 +177,37 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
 
         // Funds Breakdown: Dernier virement reçu vs En réserve
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val paidValue = if (currency.equals("EUR", ignoreCase = true) && payoutEst.verifiedPastPayoutEurCents != null) {
-                Analytics.localMoney(payoutEst.verifiedPastPayoutEurCents, "EUR")
-            } else {
-                Analytics.money(payoutEst.alreadyPaidUsdCents, currency, snapshot?.eurPerUsd)
+            val lastPayout = payoutEst.pastPayouts.lastOrNull()
+            val paidValue = when {
+                lastPayout == null -> Analytics.money(0L, s.currency, snapshot.eurPerUsd)
+                s.currency.equals("EUR", ignoreCase = true) && lastPayout.verifiedEurCents != null ->
+                    Analytics.localMoney(lastPayout.verifiedEurCents, "EUR")
+                else -> Analytics.money(lastPayout.amountUsdCents, s.currency, snapshot.eurPerUsd)
+            }
+            val paidSubtitle = when {
+                lastPayout == null -> "Aucun virement émis"
+                lastPayout.verifiedEurCents != null -> "Reçu le 29 oct."
+                else -> "Cycle du ${friendlyDate(lastPayout.date.toString())}"
             }
             StatCard(
                 title = "Dernier virement reçu",
                 value = paidValue,
                 icon = Icons.Default.AccountBalance,
                 iconTint = MintSuccessLight,
-                subtitle = "Reçu le 29 oct.",
+                subtitle = paidSubtitle,
                 modifier = Modifier.weight(1f)
             )
+            val holdingSubtitle = if (payoutEst.holdingCount == 0) {
+                "Aucune vente récente"
+            } else {
+                "${pluralFr(payoutEst.holdingCount, "vente")} en sécurité"
+            }
             StatCard(
                 title = "En réserve (13j)",
-                value = Analytics.money(payoutEst.pocketHoldingUsdCents, currency, snapshot?.eurPerUsd),
+                value = Analytics.money(payoutEst.pocketHoldingUsdCents, s.currency, snapshot.eurPerUsd),
                 icon = Icons.Default.LockClock,
                 iconTint = AmberWarningLight,
-                subtitle = "Sécurité MoR",
+                subtitle = holdingSubtitle,
                 modifier = Modifier.weight(1f)
             )
         }
@@ -175,11 +218,11 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                 Text("Virements bancaires effectués", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
                 Spacer(Modifier.height(10.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    payoutEst.pastPayouts.forEach { payout ->
-                        val amountText = if (payout.verifiedEurCents != null && currency.equals("EUR", ignoreCase = true)) {
+                    payoutEst.pastPayouts.sortedByDescending { it.date }.forEach { payout ->
+                        val amountText = if (payout.verifiedEurCents != null && s.currency.equals("EUR", ignoreCase = true)) {
                             Analytics.localMoney(payout.verifiedEurCents, "EUR")
                         } else {
-                            Analytics.money(payout.amountUsdCents, currency, snapshot?.eurPerUsd)
+                            Analytics.money(payout.amountUsdCents, s.currency, snapshot.eurPerUsd)
                         }
                         val subtitleText = if (payout.verifiedEurCents != null) {
                             "Reçu le 29 oct. sur votre compte bancaire"
@@ -191,7 +234,10 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f).padding(end = 8.dp)
+                            ) {
                                 Surface(
                                     color = MintSuccessContainer,
                                     shape = CircleShape,
@@ -202,21 +248,31 @@ fun PayoutScreen(snapshot: Snapshot?, currency: String, onOpenGlossary: () -> Un
                                     }
                                 }
                                 Spacer(Modifier.width(10.dp))
-                                Column {
+                                Column(Modifier.weight(1f)) {
                                     Text(
                                         text = payout.date.format(DateTimeFormatter.ofPattern("dd MMMM yyyy", Locale.FRANCE)),
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.SemiBold,
-                                        color = TextPrimary
+                                        color = TextPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
                                     )
-                                    Text(subtitleText, fontSize = 11.sp, color = TextSecondary)
+                                    Text(
+                                        text = subtitleText,
+                                        fontSize = 11.sp,
+                                        color = TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
                                 }
                             }
                             Text(
                                 text = amountText,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = MintSuccessLight
+                                color = MintSuccessLight,
+                                softWrap = false,
+                                maxLines = 1
                             )
                         }
                     }

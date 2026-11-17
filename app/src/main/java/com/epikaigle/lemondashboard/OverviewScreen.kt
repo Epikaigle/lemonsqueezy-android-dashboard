@@ -3,6 +3,7 @@ package com.epikaigle.lemondashboard
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.time.LocalDate
@@ -26,19 +28,25 @@ fun OverviewScreen(
     sales: List<Sale>,
     subs: List<Subscription>,
     s: UiState,
-    vm: DashboardViewModel
+    vm: DashboardViewModel,
+    onOpenGlossary: () -> Unit = {}
 ) {
     val now = remember { LocalDate.now() }
     val m = remember(sales, subs, s.period) { Analytics.metrics(sales, subs, s.period, now) }
     val history = remember(sales, s.period) { Analytics.graphBuckets(sales, s.period, now) }
     val prevNet = remember(sales, s.period) { Analytics.previousPeriodNet(sales, s.period, now) }
     val refundRate = remember(sales) { Analytics.refundRatePercent(sales) }
-    val aov = remember(sales) { Analytics.averageOrderValueUsdCents(sales) }
+    val inPeriodSales = remember(sales, s.period) {
+        sales.filter { Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, now) }
+    }
+    val aov = remember(inPeriodSales) { Analytics.averageOrderValueUsdCents(inPeriodSales) }
+    val pocketPeriodNet = remember(inPeriodSales) {
+        inPeriodSales.filter { it.paid }.sumOf { Analytics.realPocketNetUsdCents(it) }
+    }
     val mrr = remember(subs) { Analytics.mrrEstimateUsdCents(subs) }
     val activeSubsCount = remember(subs) { subs.count { it.status in setOf("active", "on_trial") } }
     val arpu = remember(mrr, activeSubsCount) { Analytics.arpuUsdCents(mrr, activeSubsCount) }
-    val productLeaderboard = remember(sales, s.period) {
-        val inPeriodSales = sales.filter { Analytics.inPeriod(Analytics.dateOf(it.createdAt), s.period, now) }
+    val productLeaderboard = remember(inPeriodSales) {
         Analytics.topProducts(inPeriodSales, 5)
     }
     var selectedSaleForDetail by remember { mutableStateOf<Sale?>(null) }
@@ -80,11 +88,14 @@ fun OverviewScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "CHIFFRE D'AFFAIRES NET",
+                                text = "CHIFFRE D'AFFAIRES (${s.period.title.uppercase()})",
                                 color = MintSuccessLight,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
+                                letterSpacing = 0.8.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).padding(end = 8.dp)
                             )
                             if (prevNet != null) {
                                 val diff = m.netUsdCents - prevNet
@@ -97,9 +108,23 @@ fun OverviewScreen(
 
                         Text(
                             text = Analytics.money(m.netUsdCents, s.currency, snapshot.eurPerUsd),
-                            fontSize = 32.sp,
+                            fontSize = 30.sp,
                             fontWeight = FontWeight.ExtraBold,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        Text(
+                            text = "Net estimé en poche : ≈\u00A0${Analytics.money(pocketPeriodNet, s.currency, snapshot.eurPerUsd)}",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -114,14 +139,18 @@ fun OverviewScreen(
                     value = m.payments.toString(),
                     icon = Icons.Default.Payments,
                     iconTint = MintSuccessLight,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { vm.tab(1) }
                 )
                 StatCard(
                     title = "Abos actifs",
                     value = m.activeSubscriptions.toString(),
                     icon = Icons.Default.Autorenew,
                     iconTint = Lemon,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { vm.tab(2) }
                 )
             }
         }
@@ -133,14 +162,18 @@ fun OverviewScreen(
                     value = Analytics.money(m.grossUsdCents, s.currency, snapshot.eurPerUsd),
                     icon = Icons.Default.TrendingUp,
                     iconTint = TextSecondary,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { vm.tab(1) }
                 )
                 StatCard(
                     title = "Remboursements",
                     value = Analytics.money(m.refundedUsdCents, s.currency, snapshot.eurPerUsd),
                     icon = Icons.Default.AssignmentReturn,
                     iconTint = CoralDangerLight,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { vm.tab(1) }
                 )
             }
         }
@@ -152,20 +185,24 @@ fun OverviewScreen(
                     value = Analytics.money(aov, s.currency, snapshot.eurPerUsd),
                     icon = Icons.Default.ShoppingCart,
                     iconTint = MintSuccessLight,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { vm.tab(1) }
                 )
                 StatCard(
                     title = "Revenu / Abo",
                     value = Analytics.money(arpu, s.currency, snapshot.eurPerUsd),
                     icon = Icons.Default.AccountCircle,
                     iconTint = Lemon,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { vm.tab(2) }
                 )
             }
         }
 
         item {
-            MerchantHealthCard(refundRate)
+            MerchantHealthCard(refundRate, onClick = onOpenGlossary)
         }
 
         // Interactive Revenue Chart
@@ -174,7 +211,8 @@ fun OverviewScreen(
                 buckets = history,
                 currency = s.currency,
                 rate = snapshot.eurPerUsd,
-                periodTitle = s.period.title
+                periodTitle = s.period.title,
+                period = s.period
             )
         }
 
@@ -190,7 +228,7 @@ fun OverviewScreen(
             Column {
                 SectionHeader(
                     title = "Dernières transactions",
-                    subtitle = "${sales.size} au total",
+                    subtitle = "${pluralFr(sales.size, "transaction")} au total",
                     action = {
                         TextButton(onClick = { vm.tab(1) }) {
                             Text("Voir tout", color = Lemon, fontWeight = FontWeight.SemiBold)

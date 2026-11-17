@@ -100,7 +100,7 @@ fun StatCard(
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f).padding(end = 6.dp)
                 )
                 Box(
                     modifier = Modifier
@@ -189,6 +189,35 @@ fun MetricCounterCard(
     }
 }
 
+fun pluralFr(count: Int, singular: String, plural: String = "${singular}s"): String =
+    if (count <= 1) "$count\u00A0$singular" else "$count\u00A0$plural"
+
+fun daysUntilLabel(days: Long): String = when {
+    days <= 0L -> "Aujourd'hui"
+    days == 1L -> "Demain"
+    else -> "Dans $days\u00A0jours"
+}
+
+fun frenchStatusLabel(status: String): String = when (status) {
+    "paid" -> "Payé"
+    "active" -> "Actif"
+    "inactive" -> "Non activée"
+    "disabled" -> "Désactivée"
+    "on_trial" -> "En essai"
+    "cancelled" -> "Résilié"
+    "refunded" -> "Remboursé"
+    "partial_refund" -> "Remb. partiel"
+    "expired" -> "Expiré"
+    "past_due" -> "En retard"
+    "unpaid" -> "Impayé"
+    "paused" -> "En pause"
+    "pending" -> "En attente"
+    "failed" -> "Échoué"
+    "void" -> "Annulé"
+    "draft" -> "Brouillon"
+    else -> status.replaceFirstChar { it.uppercase() }
+}
+
 @Composable
 fun TrendBadge(rate: Double?, label: String? = null) {
     if (rate == null) return
@@ -211,7 +240,7 @@ fun TrendBadge(rate: Double?, label: String? = null) {
     }
     val rateText = when {
         isZero -> "Stable"
-        else -> "${if (isPositive) "+" else ""}${"%.1f".format(Locale.FRANCE, rate)} %"
+        else -> "${if (isPositive) "+" else ""}${"%.1f".format(Locale.FRANCE, rate)}\u00A0%"
     }
     val displayText = if (label != null) "$rateText $label" else rateText
 
@@ -230,7 +259,9 @@ fun TrendBadge(rate: Double?, label: String? = null) {
                 text = displayText,
                 color = contentColor,
                 fontSize = 11.sp,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                softWrap = false,
+                maxLines = 1
             )
         }
     }
@@ -238,19 +269,13 @@ fun TrendBadge(rate: Double?, label: String? = null) {
 
 @Composable
 fun StatusBadge(status: String) {
-    val (label, tint, bg) = when (status) {
-        "paid" -> Triple("Payé", MintSuccessLight, MintSuccessContainer.copy(alpha = 0.4f))
-        "active" -> Triple("Actif", MintSuccessLight, MintSuccessContainer.copy(alpha = 0.4f))
-        "on_trial" -> Triple("Essai", AmberWarningLight, AmberWarningContainer.copy(alpha = 0.4f))
-        "cancelled" -> Triple("Annulé", CoralDangerLight, CoralDangerContainer.copy(alpha = 0.4f))
-        "refunded" -> Triple("Remboursé", CoralDangerLight, CoralDangerContainer.copy(alpha = 0.4f))
-        "partial_refund" -> Triple("Remb. partiel", AmberWarningLight, AmberWarningContainer.copy(alpha = 0.4f))
-        "expired" -> Triple("Expiré", TextMuted, DarkSurfaceVariant)
-        "past_due" -> Triple("En retard", CoralDangerLight, CoralDangerContainer.copy(alpha = 0.4f))
-        "unpaid" -> Triple("Impayé", CoralDangerLight, CoralDangerContainer.copy(alpha = 0.4f))
-        "paused" -> Triple("En pause", AmberWarningLight, AmberWarningContainer.copy(alpha = 0.4f))
-        "pending" -> Triple("En attente", AmberWarningLight, AmberWarningContainer.copy(alpha = 0.4f))
-        else -> Triple(status.replaceFirstChar { it.uppercase() }, TextSecondary, DarkSurfaceVariant)
+    val label = frenchStatusLabel(status)
+    val (tint, bg) = when (status) {
+        "paid", "active" -> MintSuccessLight to MintSuccessContainer.copy(alpha = 0.4f)
+        "on_trial", "partial_refund", "paused", "pending", "inactive" -> AmberWarningLight to AmberWarningContainer.copy(alpha = 0.4f)
+        "cancelled", "refunded", "past_due", "unpaid", "disabled", "failed" -> CoralDangerLight to CoralDangerContainer.copy(alpha = 0.4f)
+        "expired", "void", "draft" -> TextMuted to DarkSurfaceVariant
+        else -> TextSecondary to DarkSurfaceVariant
     }
 
     Surface(
@@ -263,9 +288,44 @@ fun StatusBadge(status: String) {
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold,
             color = tint,
+            softWrap = false,
+            maxLines = 1,
             modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp)
         )
     }
+}
+
+private val frenchMonthsShort = listOf(
+    "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin",
+    "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."
+)
+
+private val frenchMonthsFull = listOf(
+    "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+    "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"
+)
+
+private fun formatChartAxisLabel(raw: String, period: Period): String {
+    if (raw.isBlank()) return ""
+    return when (period) {
+        Period.MONTH -> if (raw == "1") "1er" else raw
+        Period.YEAR -> {
+            val monthIndex = (raw.toIntOrNull() ?: 0) - 1
+            frenchMonthsShort.getOrElse(monthIndex) { raw }
+        }
+        else -> raw
+    }
+}
+
+private fun formatChartTooltipLabel(raw: String, period: Period): String = when (period) {
+    Period.DAY -> "Créneau : ${raw.removeSuffix("h")}h00"
+    Period.WEEK -> "Date : $raw"
+    Period.MONTH -> "Le ${if (raw == "1") "1er" else raw} du mois"
+    Period.YEAR -> {
+        val monthIndex = (raw.toIntOrNull() ?: 0) - 1
+        "Mois : ${frenchMonthsFull.getOrElse(monthIndex) { raw }}"
+    }
+    Period.ALL -> if (raw == "Sans date") "Remboursements sans date" else "Année $raw"
 }
 
 @Composable
@@ -273,7 +333,8 @@ fun InteractiveChartCard(
     buckets: List<Pair<String, Long>>,
     currency: String,
     rate: Double?,
-    periodTitle: String
+    periodTitle: String,
+    period: Period = Period.MONTH
 ) {
     var selectedIndex by remember(buckets) { mutableStateOf<Int?>(null) }
     val maxValue = (buckets.maxOfOrNull { it.second } ?: 0L).coerceAtLeast(0L)
@@ -290,7 +351,10 @@ fun InteractiveChartCard(
                 text = "Évolution des revenus",
                 fontWeight = FontWeight.Bold,
                 fontSize = 15.sp,
-                color = TextPrimary
+                color = TextPrimary,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             if (selectedIndex != null) {
                 IconButton(
@@ -329,18 +393,21 @@ fun InteractiveChartCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val isHourly = periodTitle.contains("Aujourd'hui", ignoreCase = true) || (pair.first.length <= 2 && pair.first.all { it.isDigit() })
-                        val dateLabel = if (isHourly) "Heure : ${pair.first}h00" else "Période : ${pair.first}"
                         Text(
-                            text = dateLabel,
+                            text = formatChartTooltipLabel(pair.first, period),
                             color = TextSecondary,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).padding(end = 8.dp)
                         )
                         Text(
                             text = Analytics.money(pair.second, currency, rate),
                             fontWeight = FontWeight.Bold,
                             color = if (pair.second >= 0) Lemon else CoralDangerLight,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            softWrap = false,
+                            maxLines = 1
                         )
                     }
                 }
@@ -439,16 +506,15 @@ fun InteractiveChartCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                val isHourly = periodTitle.contains("Aujourd'hui", ignoreCase = true) || ((buckets.firstOrNull()?.first?.length ?: 0) <= 2 && buckets.firstOrNull()?.first?.all { it.isDigit() } == true)
-                val firstLabel = buckets.firstOrNull()?.first.orEmpty().let { if (isHourly && it.isNotBlank()) "${it}h" else it }
-                val midLabel = buckets.getOrNull(buckets.size / 2)?.first.orEmpty().let { if (isHourly && it.isNotBlank()) "${it}h" else it }
-                val lastLabel = buckets.lastOrNull()?.first.orEmpty().let { if (isHourly && it.isNotBlank()) "${it}h" else it }
+                val firstLabel = formatChartAxisLabel(buckets.firstOrNull()?.first.orEmpty(), period)
+                val midLabel = formatChartAxisLabel(buckets.getOrNull(buckets.size / 2)?.first.orEmpty(), period)
+                val lastLabel = formatChartAxisLabel(buckets.lastOrNull()?.first.orEmpty(), period)
 
-                Text(firstLabel, color = TextMuted, fontSize = 11.sp)
+                Text(firstLabel, color = TextMuted, fontSize = 11.sp, softWrap = false)
                 if (buckets.size > 2) {
-                    Text(midLabel, color = TextMuted, fontSize = 11.sp)
+                    Text(midLabel, color = TextMuted, fontSize = 11.sp, softWrap = false)
                 }
-                Text(lastLabel, color = TextMuted, fontSize = 11.sp)
+                Text(lastLabel, color = TextMuted, fontSize = 11.sp, softWrap = false)
             }
         }
     }
@@ -486,7 +552,7 @@ fun TransactionDetailSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
                         text = sale.product,
                         fontSize = 20.sp,
@@ -517,9 +583,16 @@ fun TransactionDetailSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
                         Text("IDENTIFIANT DE TRANSACTION", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.SemiBold)
-                        Text(sale.id, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = sale.id,
+                            fontSize = 13.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     IconButton(
                         onClick = {
@@ -534,22 +607,7 @@ fun TransactionDetailSheet(
             }
 
             // Customer / Buyer Information Card
-            if (sale.userName.isNotBlank() || sale.userEmail.isNotBlank()) {
-                DashboardCard(backgroundColor = DarkSurfaceVariant) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Acheteur / Client", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    if (sale.userName.isNotBlank()) {
-                        DetailRow("Nom", sale.userName, isBold = true)
-                    }
-                    if (sale.userEmail.isNotBlank()) {
-                        DetailRow("Email", sale.userEmail)
-                    }
-                }
-            }
+            CustomerInfoCard("Acheteur / Client", sale.userName, sale.userEmail)
 
             // Breakdown Table Card
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
@@ -564,7 +622,7 @@ fun TransactionDetailSheet(
                 DetailRow("Total facturé (TTC)", Analytics.money(sale.usdCents, currency, snapshot.eurPerUsd))
                 if (sale.taxUsdCents != null) {
                     val label = sale.taxName.ifBlank { "TVA / taxes" }
-                    val rate = sale.taxRate?.let { " (" + it + " %)" } ?: ""
+                    val rate = sale.taxRate?.let { " (" + it + "\u00A0%)" } ?: ""
                     DetailRow(label + rate, Analytics.money(sale.taxUsdCents, currency, snapshot.eurPerUsd),
                         valueColor = TextSecondary)
                     sale.taxInclusive?.let { included ->
@@ -572,7 +630,7 @@ fun TransactionDetailSheet(
                             valueColor = TextMuted)
                     }
                 } else {
-                    Text("Détail de TVA indisponible dans le cache. Actualiser les données.",
+                    Text("Détail de TVA indisponible dans le cache. Actualisez les données.",
                         fontSize = 11.sp, color = TextMuted)
                 }
                 if (sale.usdRefundCents > 0L) {
@@ -587,32 +645,33 @@ fun TransactionDetailSheet(
                 }
                 HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 8.dp))
                 DetailRow(
-                    "Après remboursements (avant TVA et frais)",
+                    "Après remboursements",
                     Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd),
                     isBold = true,
                     valueColor = if (sale.paid) MintSuccessLight else TextMuted
                 )
                 Analytics.estimatedPlatformFeeUsdCents(sale)?.let { fee ->
-                    DetailRow("Frais Lemon Squeezy (base estimée)",
+                    DetailRow("Frais MoR (base estimée)",
                         "- " + Analytics.money(fee, currency, snapshot.eurPerUsd),
                         valueColor = TextSecondary)
                 }
                 Analytics.estimatedAfterTaxesAndFeesUsdCents(sale)?.let { projected ->
                     HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 8.dp))
-                    DetailRow("Après TVA et frais (estimé)",
+                    DetailRow("Net estimé après TVA & frais",
                         "≈ " + Analytics.money(projected, currency, snapshot.eurPerUsd),
                         isBold = true, valueColor = MintSuccessLight)
                 }
                 if (sale.paid) {
+                    Spacer(Modifier.height(4.dp))
                     Text(
                         if (sale.usdRefundCents > 0L)
-                            "Revenu après taxes et frais non estimé : les ajustements liés aux remboursements sont inconnus."
-                        else "Frais indicatifs : 5 % + 0,50 $ (et +0,5 % pour les renouvellements). Suppléments internationaux, PayPal, affiliés et frais de versement non connus. L’API ne donne pas les frais réels.",
+                            "Revenu net non estimé : ajustements de remboursement indisponibles."
+                        else "Estimation hors suppléments internationaux (+1,5\u00A0%), PayPal ou virement (1\u00A0%).",
                         fontSize = 11.sp, color = TextMuted
                     )
                 }
                 DetailRow(
-                    "Montant d'origine (après remboursements)",
+                    "Montant d'origine",
                     Analytics.localMoney(originalNet, sale.currency),
                     valueColor = TextSecondary
                 )
@@ -644,7 +703,7 @@ fun TransactionDetailSheet(
                         }
                         appendLine("• Date : ${friendlyDateTime(sale.createdAt)}")
                         appendLine("• Montant après remboursements, avant TVA et frais : ${Analytics.money(sale.netUsd, currency, snapshot.eurPerUsd)}")
-                        appendLine("• Statut : ${sale.status}")
+                        appendLine("• Statut : ${frenchStatusLabel(sale.status)}")
                     }
                     val intent = Intent(Intent.ACTION_SEND).apply {
                         type = "text/plain"
@@ -707,16 +766,17 @@ fun SubscriptionDetailSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
                         text = sub.product.ifBlank { "Abonnement" },
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
-                        maxLines = 2
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     if (sub.variant.isNotBlank()) {
-                        Text(text = sub.variant, fontSize = 13.sp, color = TextSecondary)
+                        Text(text = sub.variant, fontSize = 13.sp, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
                 StatusBadge(sub.status)
@@ -734,9 +794,16 @@ fun SubscriptionDetailSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Column {
+                    Column(Modifier.weight(1f).padding(end = 8.dp)) {
                         Text("RÉFÉRENCE ABONNEMENT", fontSize = 10.sp, color = TextMuted, fontWeight = FontWeight.SemiBold)
-                        Text(sub.id, fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                        Text(
+                            text = sub.id,
+                            fontSize = 13.sp,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     IconButton(
                         onClick = {
@@ -751,22 +818,7 @@ fun SubscriptionDetailSheet(
             }
 
             // Customer / Subscriber Information Card
-            if (sub.userName.isNotBlank() || sub.userEmail.isNotBlank()) {
-                DashboardCard(backgroundColor = DarkSurfaceVariant) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Abonné / Client", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    if (sub.userName.isNotBlank()) {
-                        DetailRow("Nom", sub.userName, isBold = true)
-                    }
-                    if (sub.userEmail.isNotBlank()) {
-                        DetailRow("Email", sub.userEmail)
-                    }
-                }
-            }
+            CustomerInfoCard("Abonné / Client", sub.userName, sub.userEmail)
 
             // Details Table
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
@@ -787,11 +839,26 @@ fun SubscriptionDetailSheet(
                         "month" -> "mois"; "year" -> "an"; "week" -> "semaine"; "day" -> "jour"
                         else -> sub.billingInterval
                     }
-                    val freq = if (interval.isBlank()) "" else " / ${if (sub.billingIntervalCount > 1) "${sub.billingIntervalCount} " else ""}$interval"
+                    val freq = if (interval.isBlank()) "" else "\u00A0/ ${if (sub.billingIntervalCount > 1) "${sub.billingIntervalCount}\u00A0" else ""}$interval"
                     DetailRow("Tarif catalogue", "${Analytics.localMoney(sub.catalogPriceCents, sub.catalogCurrency)}$freq", isBold = true)
                 }
                 if (sub.lastInvoiceUsdCents != null) {
                     DetailRow("Dernière facture payée", Analytics.money(sub.lastInvoiceUsdCents, currency, snapshot.eurPerUsd))
+                }
+            }
+
+            if (sub.testMode) {
+                Surface(
+                    color = LemonContainer.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, Lemon.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.BugReport, contentDescription = null, tint = Lemon, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Abonnement effectué en MODE TEST", fontSize = 12.sp, color = Lemon, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
 
@@ -804,6 +871,68 @@ fun SubscriptionDetailSheet(
                 colors = ButtonDefaults.buttonColors(containerColor = DarkSurfaceContainerHigh)
             ) {
                 Text("Fermer", color = TextPrimary)
+            }
+        }
+    }
+}
+
+@Composable
+fun CustomerInfoCard(
+    title: String,
+    userName: String,
+    userEmail: String
+) {
+    if (userName.isBlank() && userEmail.isBlank()) return
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    DashboardCard(backgroundColor = DarkSurfaceVariant) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
+        }
+        Spacer(Modifier.height(10.dp))
+        if (userName.isNotBlank()) {
+            Text(
+                text = userName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (userEmail.isNotBlank()) Spacer(Modifier.height(6.dp))
+        }
+        if (userEmail.isNotBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.AlternateEmail, contentDescription = null, tint = TextMuted, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = userEmail,
+                        fontSize = 12.sp,
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                IconButton(
+                    onClick = {
+                        clipboardManager.setText(AnnotatedString(userEmail))
+                        Toast.makeText(context, "Email copié !", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copier l'email", tint = Lemon, modifier = Modifier.size(15.dp))
+                }
             }
         }
     }
@@ -827,7 +956,7 @@ fun DetailRow(
             text = label,
             color = TextSecondary,
             fontSize = 13.sp,
-            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
+            modifier = Modifier.weight(1f).padding(end = 10.dp)
         )
         Text(
             text = value,
@@ -835,7 +964,8 @@ fun DetailRow(
             fontSize = 13.sp,
             fontWeight = if (isBold) FontWeight.Bold else FontWeight.Normal,
             softWrap = false,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -925,6 +1055,7 @@ fun LicenseKeyCard(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val effectiveStatus = if (license.disabled) "disabled" else license.status
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -933,13 +1064,13 @@ fun LicenseKeyCard(
         colors = CardDefaults.cardColors(containerColor = DarkSurface),
         border = BorderStroke(1.dp, DarkBorder)
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(14.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
                         text = license.productName.ifBlank { "Licence logicielle" },
                         fontWeight = FontWeight.Bold,
@@ -952,14 +1083,16 @@ fun LicenseKeyCard(
                     Text(
                         text = if (license.expiresAt.isNotBlank()) "Expire le ${friendlyDate(license.expiresAt)}" else "Licence à vie (Perpétuelle)",
                         fontSize = 11.sp,
-                        color = TextSecondary
+                        color = TextSecondary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                StatusBadge(license.status)
+                StatusBadge(effectiveStatus)
             }
 
             if (license.userName.isNotBlank() || license.userEmail.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(13.dp))
                     Spacer(Modifier.width(4.dp))
@@ -991,7 +1124,10 @@ fun LicenseKeyCard(
                         fontSize = 12.sp,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         color = Lemon,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
                     )
                     IconButton(
                         onClick = {
@@ -1000,7 +1136,7 @@ fun LicenseKeyCard(
                         },
                         modifier = Modifier.size(28.dp)
                     ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Copier", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Copier la clé", tint = TextSecondary, modifier = Modifier.size(16.dp))
                     }
                 }
             }
@@ -1012,16 +1148,23 @@ fun LicenseKeyCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                val limit = if (license.activationLimit == 0) "Illimitée" else "${license.activationLimit}"
+                val activationText = if (license.activationLimit == 0) {
+                    "${pluralFr(license.instancesCount, "poste activé", "postes activés")} • Illimité"
+                } else {
+                    "Activations : ${license.instancesCount}\u00A0/\u00A0${license.activationLimit}\u00A0PC"
+                }
                 Text(
-                    text = "Activations : ${license.instancesCount} / $limit",
+                    text = activationText,
                     fontSize = 12.sp,
                     color = TextMuted,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (license.instancesCount > 0) {
                     Surface(
-                        color = MintSuccessContainer,
+                        color = MintSuccessContainer.copy(alpha = 0.4f),
                         shape = RoundedCornerShape(100.dp)
                     ) {
                         Text(
@@ -1029,7 +1172,9 @@ fun LicenseKeyCard(
                             fontSize = 10.sp,
                             color = MintSuccessLight,
                             fontWeight = FontWeight.Bold,
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            softWrap = false,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -1046,6 +1191,7 @@ fun LicenseKeyDetailSheet(
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val effectiveStatus = if (license.disabled) "disabled" else license.status
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1067,13 +1213,14 @@ fun LicenseKeyDetailSheet(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Column(Modifier.weight(1f)) {
+                Column(Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
                         text = license.productName.ifBlank { "Licence logicielle" },
                         fontSize = 20.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
-                        maxLines = 2
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "Émise le ${friendlyDateTime(license.createdAt)}",
@@ -1081,7 +1228,7 @@ fun LicenseKeyDetailSheet(
                         color = TextSecondary
                     )
                 }
-                StatusBadge(license.status)
+                StatusBadge(effectiveStatus)
             }
 
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
@@ -1110,7 +1257,7 @@ fun LicenseKeyDetailSheet(
                     ) {
                         Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Copier", fontWeight = FontWeight.Bold)
+                        Text("Copier", fontWeight = FontWeight.Bold, softWrap = false, maxLines = 1)
                     }
 
                     OutlinedButton(
@@ -1125,7 +1272,7 @@ fun LicenseKeyDetailSheet(
                                     appendLine("Date d'expiration : ${friendlyDate(license.expiresAt)}")
                                 }
                                 if (license.activationLimit > 0) {
-                                    appendLine("Limite : ${license.activationLimit} machine(s)")
+                                    appendLine("Limite : ${pluralFr(license.activationLimit, "poste", "postes")}")
                                 }
                             }
                             val intent = Intent(Intent.ACTION_SEND).apply {
@@ -1141,35 +1288,24 @@ fun LicenseKeyDetailSheet(
                     ) {
                         Icon(Icons.Default.Share, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Partager", color = Lemon, fontWeight = FontWeight.Bold)
+                        Text("Partager", color = Lemon, fontWeight = FontWeight.Bold, softWrap = false, maxLines = 1)
                     }
                 }
             }
 
             // Customer / License Holder Card
-            if (license.userName.isNotBlank() || license.userEmail.isNotBlank()) {
-                DashboardCard(backgroundColor = DarkSurfaceVariant) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Person, contentDescription = null, tint = Lemon, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Titulaire de la licence", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    if (license.userName.isNotBlank()) {
-                        DetailRow("Nom de l'acheteur", license.userName, isBold = true)
-                    }
-                    if (license.userEmail.isNotBlank()) {
-                        DetailRow("Email", license.userEmail)
-                    }
-                }
-            }
+            CustomerInfoCard("Titulaire de la licence", license.userName, license.userEmail)
 
             DashboardCard(backgroundColor = DarkSurfaceVariant) {
                 Text("Détails d'activation", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextPrimary)
                 Spacer(Modifier.height(10.dp))
-                val limit = if (license.activationLimit == 0) "Illimitée" else "${license.activationLimit} machine(s)"
+                val limit = if (license.activationLimit == 0) "Illimitée" else pluralFr(license.activationLimit, "poste", "postes")
                 DetailRow("Limite d'activation", limit)
-                DetailRow("Machines actives", "${license.instancesCount} active(s)", valueColor = MintSuccessLight)
+                DetailRow(
+                    "Postes activés",
+                    pluralFr(license.instancesCount, "poste actif", "postes actifs"),
+                    valueColor = if (license.instancesCount > 0) MintSuccessLight else TextSecondary
+                )
                 if (license.expiresAt.isNotBlank()) {
                     DetailRow("Date d'expiration", friendlyDate(license.expiresAt), valueColor = AmberWarningLight)
                 } else {
@@ -1195,37 +1331,41 @@ fun LicenseKeyDetailSheet(
 }
 
 @Composable
-fun MerchantHealthCard(refundRate: Double) {
+fun MerchantHealthCard(refundRate: Double, onClick: (() -> Unit)? = null) {
     val (statusText, statusColor, containerColor) = when {
-        refundRate < 1.0 -> Triple("Excellente (< 1%)", MintSuccessLight, MintSuccessContainer)
-        refundRate <= 2.0 -> Triple("Modérée (1-2%)", AmberWarningLight, AmberWarningContainer)
-        else -> Triple("Attention (> 2%)", CoralDangerLight, CoralDangerContainer)
+        refundRate < 1.0 -> Triple("Excellente (< 1\u00A0%)", MintSuccessLight, MintSuccessContainer)
+        refundRate <= 2.0 -> Triple("Modérée (1–2\u00A0%)", AmberWarningLight, AmberWarningContainer)
+        else -> Triple("Attention (> 2\u00A0%)", CoralDangerLight, CoralDangerContainer)
     }
 
-    DashboardCard {
+    DashboardCard(modifier = if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
                     text = "SANTÉ DU COMPTE MARCHAND",
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextSecondary,
-                    letterSpacing = 1.sp
+                    letterSpacing = 0.8.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    text = String.format(Locale.US, "%.1f%% de remboursement", refundRate),
-                    fontSize = 18.sp,
+                    text = String.format(Locale.FRANCE, "%.1f\u00A0%% de remboursement", refundRate),
+                    fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold,
-                    color = TextPrimary
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
             Surface(
-                color = containerColor,
+                color = containerColor.copy(alpha = 0.6f),
                 shape = RoundedCornerShape(100.dp)
             ) {
                 Text(
@@ -1233,6 +1373,8 @@ fun MerchantHealthCard(refundRate: Double) {
                     color = statusColor,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
+                    softWrap = false,
+                    maxLines = 1,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                 )
             }
@@ -1243,7 +1385,7 @@ fun MerchantHealthCard(refundRate: Double) {
 @Composable
 fun TopProductsCard(products: List<Analytics.ProductMetric>, currency: String, eurPerUsd: Double?) {
     DashboardCard {
-        Text("Meilleures Ventes de Logiciels", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+        Text("Meilleures ventes", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
         Spacer(Modifier.height(12.dp))
         if (products.isEmpty()) {
             Text("Aucune vente enregistrée sur cette sélection.", fontSize = 12.sp, color = TextMuted)
@@ -1264,15 +1406,17 @@ fun TopProductsCard(products: List<Analytics.ProductMetric>, currency: String, e
                             }
                         }
                         Spacer(Modifier.width(10.dp))
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(p.name, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${p.salesCount} vente(s)", fontSize = 11.sp, color = TextSecondary)
+                            Text(pluralFr(p.salesCount, "vente"), fontSize = 11.sp, color = TextSecondary, maxLines = 1)
                         }
                         Text(
                             text = Analytics.money(p.netUsdCents, currency, eurPerUsd),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = TextPrimary,
+                            softWrap = false,
+                            maxLines = 1
                         )
                     }
                     if (index < products.lastIndex) {
@@ -1292,7 +1436,15 @@ fun UpcomingRenewalsCard(renewals: List<Analytics.UpcomingRenewal>, currency: St
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Prochains Renouvellements (30j)", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = TextPrimary)
+            Text(
+                text = "Renouvellements à venir (30j)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 15.sp,
+                color = TextPrimary,
+                modifier = Modifier.weight(1f).padding(end = 8.dp),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             val projectedTotal = renewals.sumOf { it.estimatedUsdCents }
             Surface(
                 color = PurpleAccent.copy(alpha = 0.2f),
@@ -1303,6 +1455,8 @@ fun UpcomingRenewalsCard(renewals: List<Analytics.UpcomingRenewal>, currency: St
                     color = Color(0xFFDDD6FE),
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Bold,
+                    softWrap = false,
+                    maxLines = 1,
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                 )
             }
@@ -1318,7 +1472,7 @@ fun UpcomingRenewalsCard(renewals: List<Analytics.UpcomingRenewal>, currency: St
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column(Modifier.weight(1f)) {
+                        Column(Modifier.weight(1f).padding(end = 8.dp)) {
                             Text(
                                 text = r.subscription.product.ifBlank { "Abonnement" },
                                 fontSize = 13.sp,
@@ -1327,17 +1481,27 @@ fun UpcomingRenewalsCard(renewals: List<Analytics.UpcomingRenewal>, currency: St
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val buyer = r.subscription.userName.ifBlank { r.subscription.userEmail }
+                            val line2 = if (buyer.isNotBlank()) {
+                                "$buyer • ${daysUntilLabel(r.daysRemaining)}"
+                            } else {
+                                "${daysUntilLabel(r.daysRemaining)} • ${friendlyDate(r.renewalDate.toString())}"
+                            }
                             Text(
-                                text = "Dans ${r.daysRemaining} jour(s) • ${friendlyDate(r.renewalDate.toString())}",
+                                text = line2,
                                 fontSize = 11.sp,
-                                color = TextSecondary
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                         Text(
                             text = Analytics.money(r.estimatedUsdCents, currency, eurPerUsd),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold,
-                            color = MintSuccessLight
+                            color = MintSuccessLight,
+                            softWrap = false,
+                            maxLines = 1
                         )
                     }
                 }
@@ -1354,9 +1518,22 @@ fun FeeCalculatorDialog(
 ) {
     var priceInput by remember { mutableStateOf("29") }
     var isInternational by remember { mutableStateOf(false) }
+    var isSubscription by remember { mutableStateOf(false) }
 
-    val amountCents = (priceInput.toDoubleOrNull() ?: 0.0).times(100).toLong()
-    val fee = Analytics.lemonSqueezyFees(amountCents, isInternational)
+    val localCents = kotlin.math.round((priceInput.toDoubleOrNull() ?: 0.0) * 100.0).toLong()
+    val fx = (eurPerUsd ?: (1.0 / 1.1511)).coerceAtLeast(0.01)
+    val fixedLocalCents = if (currency.equals("EUR", ignoreCase = true)) {
+        kotlin.math.round(50.0 * fx).toLong()
+    } else {
+        50L
+    }
+    val pct = 5.0 + (if (isInternational) 1.5 else 0.0) + (if (isSubscription) 0.5 else 0.0)
+    val totalFeeCents = if (localCents <= 0L) 0L else {
+        (kotlin.math.round(localCents * pct / 100.0).toLong() + fixedLocalCents).coerceAtMost(localCents)
+    }
+    val netLocalCents = (localCents - totalFeeCents).coerceAtLeast(0L)
+    val effectivePercent = if (localCents > 0L) (totalFeeCents.toDouble() / localCents.toDouble()) * 100.0 else 0.0
+    val symbol = if (currency.equals("EUR", ignoreCase = true)) "€" else "$"
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1367,11 +1544,14 @@ fun FeeCalculatorDialog(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Calculate, contentDescription = null, tint = Lemon, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(8.dp))
-                Text("Calculateur de frais MoR", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                Text("Simulateur de frais MoR", fontSize = 17.sp, fontWeight = FontWeight.Bold)
             }
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
                 OutlinedTextField(
                     value = priceInput,
                     onValueChange = { input ->
@@ -1380,7 +1560,7 @@ fun FeeCalculatorDialog(
                             priceInput = clean
                         }
                     },
-                    label = { Text("Prix de vente du logiciel ($currency)", color = TextMuted) },
+                    label = { Text("Prix de vente ($currency)", color = TextMuted) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                     colors = OutlinedTextFieldDefaults.colors(
@@ -1404,7 +1584,7 @@ fun FeeCalculatorDialog(
                         FilterChip(
                             selected = priceInput == preset,
                             onClick = { priceInput = preset },
-                            label = { Text("$preset $currency", fontSize = 11.sp) },
+                            label = { Text("$preset\u00A0$symbol", fontSize = 11.sp, softWrap = false) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = Lemon,
                                 selectedLabelColor = DarkBackground,
@@ -1420,10 +1600,33 @@ fun FeeCalculatorDialog(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Text("Paiement International ou PayPal (+1,5%)", fontSize = 12.sp, color = TextPrimary, modifier = Modifier.weight(1f))
+                    Text(
+                        "Carte internationale ou PayPal (+1,5\u00A0%)",
+                        fontSize = 12.sp,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    )
                     Switch(
                         checked = isInternational,
                         onCheckedChange = { isInternational = it },
+                        colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = Lemon)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Abonnement récurrent (+0,5\u00A0%)",
+                        fontSize = 12.sp,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                    )
+                    Switch(
+                        checked = isSubscription,
+                        onCheckedChange = { isSubscription = it },
                         colors = SwitchDefaults.colors(checkedThumbColor = DarkBackground, checkedTrackColor = Lemon)
                     )
                 }
@@ -1434,24 +1637,24 @@ fun FeeCalculatorDialog(
                     border = BorderStroke(1.dp, DarkBorder),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    val marginPercent = if (fee.grossCents > 0L) (fee.netCents.toDouble() / fee.grossCents.toDouble()) * 100.0 else 0.0
+                    val marginPercent = if (localCents > 0L) (netLocalCents.toDouble() / localCents.toDouble()) * 100.0 else 0.0
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        DetailRow("Prix brut", Analytics.money(fee.grossCents, currency, eurPerUsd))
+                        DetailRow("Prix brut HT", Analytics.localMoney(localCents, currency))
                         DetailRow(
-                            "Frais Lemon Squeezy (${String.format(Locale.US, "%.1f", fee.feePercentage)}%)",
-                            "- ${Analytics.money(fee.feeCents, currency, eurPerUsd)}",
+                            "Frais MoR (${String.format(Locale.FRANCE, "%.1f", effectivePercent)}\u00A0%)",
+                            "- ${Analytics.localMoney(totalFeeCents, currency)}",
                             valueColor = CoralDangerLight
                         )
                         HorizontalDivider(color = DarkBorder, modifier = Modifier.padding(vertical = 4.dp))
                         DetailRow(
-                            "Bénéfice net dans votre poche",
-                            Analytics.money(fee.netCents, currency, eurPerUsd),
+                            "Bénéfice net estimé",
+                            Analytics.localMoney(netLocalCents, currency),
                             isBold = true,
                             valueColor = MintSuccessLight
                         )
                         DetailRow(
                             "Marge nette conservée",
-                            String.format(Locale.US, "%.1f%%", marginPercent),
+                            String.format(Locale.FRANCE, "%.1f\u00A0%%", marginPercent),
                             valueColor = MintSuccessLight
                         )
                     }
@@ -1551,6 +1754,12 @@ fun GlossarySheet(onDismiss: () -> Unit) {
                 badgeColor = AmberWarningLight,
                 title = "En attente / Non encaissé",
                 description = "Désigne un paiement client en cours de confirmation bancaire, ou un montant en cours de rétention de sécurité (13 jours) avant d'être libéré pour votre prochain virement."
+            ),
+            GlossaryTerm(
+                badge = "ARPU",
+                badgeColor = Lemon,
+                title = "Average Revenue Per User (Revenu / Abonné)",
+                description = "Revenu mensuel récurrent moyen généré par chaque abonnement actif (MRR divisé par le nombre d'abonnés actifs)."
             ),
             GlossaryTerm(
                 badge = "TVA",

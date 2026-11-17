@@ -200,7 +200,8 @@ object Analytics {
         val pocketNextPayoutUsdCents: Long = projectedNextPayoutUsdCents,
         val pocketHoldingUsdCents: Long = holdingUsdCents,
         val monthlyNetPocketUsdCents: Long = 0L,
-        val verifiedPastPayoutEurCents: Long? = null
+        val verifiedPastPayoutEurCents: Long? = null,
+        val holdingCount: Int = 0
     ) {
         val nextPayoutUsdCents: Long get() = projectedNextPayoutUsdCents
     }
@@ -222,12 +223,10 @@ object Analytics {
 
     fun moneyRange(usdCents: Long, currency: String = "USD", eurPerUsd: Double? = null): String {
         if (usdCents <= 0L) return money(0L, currency, eurPerUsd)
-        val isEur = currency.equals("EUR", ignoreCase = true)
-        val rate = if (isEur) (eurPerUsd ?: (1.0 / 1.1511)) else 1.0
-        val base = kotlin.math.round(usdCents * rate).toLong()
-        val min = kotlin.math.round(base * 0.96).toLong()
-        val max = kotlin.math.round(base * 1.04).toLong()
-        return "${money(min, currency, eurPerUsd)}\u00A0–\u00A0${money(max, currency, eurPerUsd)}"
+        val effectiveRate = if (currency.equals("EUR", ignoreCase = true)) (eurPerUsd ?: (1.0 / 1.1511)) else null
+        val minUsd = kotlin.math.round(usdCents * 0.96).toLong()
+        val maxUsd = kotlin.math.round(usdCents * 1.04).toLong()
+        return "${money(minUsd, currency, effectiveRate)}\u00A0–\u00A0${money(maxUsd, currency, effectiveRate)}"
     }
 
     fun payoutEstimates(sales: List<Sale>, today: LocalDate = LocalDate.now()): PayoutEstimates {
@@ -241,6 +240,7 @@ object Analytics {
 
         var holding = 0L
         var pocketHolding = 0L
+        var holdingCount = 0
         val matureSales = mutableListOf<Pair<LocalDate, Long>>()
         for (sale in sales) {
             if (!sale.paid) continue
@@ -251,6 +251,7 @@ object Analytics {
             if (date.isAfter(cutoff)) {
                 holding += net
                 pocketHolding += pocketNet
+                holdingCount++
             } else {
                 matureSales.add(date to effectiveNet)
             }
@@ -306,9 +307,14 @@ object Analytics {
         val maturePocketByNext = sales.filter {
             it.paid && dateOf(it.createdAt)?.let { d -> !d.plusDays(13).isAfter(nextDate) } == true
         }.sumOf { realPocketNetUsdCents(it) }
-        val alreadyPaidPocket = sales.filter {
-            it.paid && dateOf(it.createdAt)?.let { d -> !d.plusDays(13).isAfter(LocalDate.of(2026, 10, 28)) } == true
-        }.sumOf { realPocketNetUsdCents(it) }
+        val lastPaidDate = pastPayouts.lastOrNull()?.date
+        val alreadyPaidPocket = if (lastPaidDate != null) {
+            sales.filter {
+                it.paid && dateOf(it.createdAt)?.let { d -> !d.plusDays(13).isAfter(lastPaidDate) } == true
+            }.sumOf { realPocketNetUsdCents(it) }
+        } else {
+            0L
+        }
         val pocketNext = (maturePocketByNext - alreadyPaidPocket).coerceAtLeast(0L)
 
         val monthSales = sales.filter { inPeriod(dateOf(it.createdAt), Period.MONTH, today) && it.paid }
@@ -329,7 +335,8 @@ object Analytics {
             pocketNextPayoutUsdCents = if (pocketNext > 0L) pocketNext else accumulated,
             pocketHoldingUsdCents = pocketHolding,
             monthlyNetPocketUsdCents = monthlyNetPocket,
-            verifiedPastPayoutEurCents = 6286L
+            verifiedPastPayoutEurCents = pastPayouts.lastOrNull()?.verifiedEurCents,
+            holdingCount = holdingCount
         )
     }
 

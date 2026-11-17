@@ -60,10 +60,13 @@ fun SubscriptionsScreen(
     val renewals = remember(subscriptions) { Analytics.upcomingRenewals(subscriptions, 30) }
 
     val filteredSubs = remember(subscriptions, subQuery, subFilter) {
+        val q = subQuery.trim()
         subscriptions.filter { sub ->
-            (subQuery.isBlank() || sub.product.contains(subQuery.trim(), ignoreCase = true) ||
-                sub.variant.contains(subQuery.trim(), ignoreCase = true) ||
-                sub.id.contains(subQuery.trim(), ignoreCase = true)) &&
+            (q.isBlank() || sub.product.contains(q, ignoreCase = true) ||
+                sub.variant.contains(q, ignoreCase = true) ||
+                sub.id.contains(q, ignoreCase = true) ||
+                sub.userName.contains(q, ignoreCase = true) ||
+                sub.userEmail.contains(q, ignoreCase = true)) &&
                 when (subFilter) {
                     1 -> sub.status == "active"
                     2 -> sub.status == "on_trial"
@@ -74,11 +77,14 @@ fun SubscriptionsScreen(
     }
 
     val filteredLicenses = remember(licenseKeys, licQuery, licFilter) {
+        val q = licQuery.trim()
         licenseKeys.filter { lic ->
-            (licQuery.isBlank() || lic.productName.contains(licQuery.trim(), ignoreCase = true) ||
-                lic.key.contains(licQuery.trim(), ignoreCase = true) ||
-                lic.keyShort.contains(licQuery.trim(), ignoreCase = true) ||
-                lic.orderId.contains(licQuery.trim(), ignoreCase = true)) &&
+            (q.isBlank() || lic.productName.contains(q, ignoreCase = true) ||
+                lic.key.contains(q, ignoreCase = true) ||
+                lic.keyShort.contains(q, ignoreCase = true) ||
+                lic.orderId.contains(q, ignoreCase = true) ||
+                lic.userName.contains(q, ignoreCase = true) ||
+                lic.userEmail.contains(q, ignoreCase = true)) &&
                 when (licFilter) {
                     1 -> lic.status == "active" && !lic.disabled
                     2 -> lic.status == "expired"
@@ -110,10 +116,11 @@ fun SubscriptionsScreen(
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .height(38.dp)
                         .clip(RoundedCornerShape(9.dp))
                         .background(if (activeSubTab == 0) Lemon else Color.Transparent)
                         .clickable { activeSubTab = 0 }
-                        .padding(vertical = 7.dp),
+                        .padding(horizontal = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -123,22 +130,26 @@ fun SubscriptionsScreen(
                             tint = if (activeSubTab == 0) DarkBackground else TextSecondary,
                             modifier = Modifier.size(15.dp)
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             text = "Abonnements (${subscriptions.size})",
                             color = if (activeSubTab == 0) DarkBackground else TextSecondary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .height(38.dp)
                         .clip(RoundedCornerShape(9.dp))
                         .background(if (activeSubTab == 1) Lemon else Color.Transparent)
                         .clickable { activeSubTab = 1 }
-                        .padding(vertical = 7.dp),
+                        .padding(horizontal = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -148,12 +159,15 @@ fun SubscriptionsScreen(
                             tint = if (activeSubTab == 1) DarkBackground else TextSecondary,
                             modifier = Modifier.size(15.dp)
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             text = "Licences (${licenseKeys.size})",
                             color = if (activeSubTab == 1) DarkBackground else TextSecondary,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -183,13 +197,19 @@ fun SubscriptionsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    modifier = Modifier.weight(1f).padding(end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Text(
-                                        text = "REVENU RÉCURRENT MENSUEL (MRR)",
+                                        text = "REVENU MENSUEL (MRR)",
                                         color = Color(0xFFC4B5FD),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Bold,
-                                        letterSpacing = 1.sp
+                                        letterSpacing = 0.6.sp,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
                                     )
                                     Spacer(Modifier.width(4.dp))
                                     Icon(
@@ -208,6 +228,8 @@ fun SubscriptionsScreen(
                                         color = Color(0xFFDDD6FE),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.SemiBold,
+                                        softWrap = false,
+                                        maxLines = 1,
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                     )
                                 }
@@ -217,9 +239,12 @@ fun SubscriptionsScreen(
 
                             Text(
                                 text = Analytics.money(mrr, s.currency, snapshot.eurPerUsd),
-                                fontSize = 32.sp,
+                                fontSize = 30.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = TextPrimary
+                                color = TextPrimary,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
@@ -231,7 +256,7 @@ fun SubscriptionsScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     StatCard(
                         title = "Taux de Churn",
-                        value = String.format(Locale.US, "%.1f%%", churnRate),
+                        value = String.format(Locale.FRANCE, "%.1f\u00A0%%", churnRate),
                         icon = Icons.Default.TrendingDown,
                         iconTint = if (churnRate > 5.0) CoralDangerLight else MintSuccessLight,
                         modifier = Modifier
@@ -240,7 +265,7 @@ fun SubscriptionsScreen(
                     )
                     StatCard(
                         title = "Quick Ratio",
-                        value = String.format(Locale.US, "%.1f", quickRatio),
+                        value = String.format(Locale.FRANCE, "%.1f", quickRatio),
                         icon = Icons.Default.Speed,
                         iconTint = if (quickRatio >= 4.0) MintSuccessLight else if (quickRatio >= 1.0) AmberWarningLight else CoralDangerLight,
                         modifier = Modifier
@@ -252,6 +277,13 @@ fun SubscriptionsScreen(
 
             // Billing Interval Breakdown Pill
             item {
+                val monthlyCount = intervals["Mensuel"] ?: 0
+                val yearlyCount = intervals["Annuel"] ?: 0
+                val otherCount = intervals["Autre"] ?: 0
+                val breakdownText = buildString {
+                    append("${pluralFr(monthlyCount, "mensuel")} • ${pluralFr(yearlyCount, "annuel")}")
+                    if (otherCount > 0) append(" • ${pluralFr(otherCount, "autre")}")
+                }
                 Surface(
                     color = DarkSurfaceVariant,
                     shape = RoundedCornerShape(10.dp),
@@ -263,12 +295,22 @@ fun SubscriptionsScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Formules récurrentes", fontSize = 12.sp, color = TextSecondary, fontWeight = FontWeight.Medium)
                         Text(
-                            text = "${intervals["Mensuel"] ?: 0} mensuel(s) • ${intervals["Annuel"] ?: 0} annuel(s)",
+                            "Formules actives",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = breakdownText,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Bold,
-                            color = Lemon
+                            color = Lemon,
+                            softWrap = false,
+                            maxLines = 1
                         )
                     }
                 }
@@ -315,7 +357,7 @@ fun SubscriptionsScreen(
                     onValueChange = { subQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Rechercher un abonnement...", color = TextMuted, fontSize = 14.sp) },
+                    placeholder = { Text("Abonnement, client ou email…", color = TextMuted, fontSize = 14.sp) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                     trailingIcon = {
                         if (subQuery.isNotEmpty()) {
@@ -375,7 +417,7 @@ fun SubscriptionsScreen(
             }
 
             item {
-                Text("${filteredSubs.size} abonnement(s)", color = TextSecondary, fontSize = 12.sp)
+                Text(pluralFr(filteredSubs.size, "abonnement"), color = TextSecondary, fontSize = 12.sp)
             }
 
             if (filteredSubs.isEmpty()) {
@@ -440,7 +482,7 @@ fun SubscriptionsScreen(
                     onValueChange = { licQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("Rechercher une clé, produit...", color = TextMuted, fontSize = 14.sp) },
+                    placeholder = { Text("Clé, client, email ou produit…", color = TextMuted, fontSize = 14.sp) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = TextMuted, modifier = Modifier.size(20.dp)) },
                     trailingIcon = {
                         if (licQuery.isNotEmpty()) {
@@ -500,7 +542,7 @@ fun SubscriptionsScreen(
             }
 
             item {
-                Text("${filteredLicenses.size} licence(s)", color = TextSecondary, fontSize = 12.sp)
+                Text(pluralFr(filteredLicenses.size, "licence"), color = TextSecondary, fontSize = 12.sp)
             }
 
             if (filteredLicenses.isEmpty()) {
@@ -582,7 +624,7 @@ fun SubscriptionItemCard(
 
             if (sub.variant.isNotBlank()) {
                 Spacer(Modifier.height(2.dp))
-                Text(sub.variant, color = TextSecondary, fontSize = 11.sp)
+                Text(sub.variant, color = TextSecondary, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
 
             val customer = listOf(sub.userName, sub.userEmail).filter { it.isNotBlank() }.joinToString(" • ")
@@ -635,14 +677,15 @@ fun SubscriptionItemCard(
                         "month" -> "mois"; "year" -> "an"; "week" -> "semaine"; "day" -> "jour"
                         else -> sub.billingInterval
                     }
-                    val frequency = if (interval.isBlank()) "" else " / ${if (sub.billingIntervalCount > 1) "${sub.billingIntervalCount} " else ""}$interval"
+                    val frequency = if (interval.isBlank()) "" else "\u00A0/ ${if (sub.billingIntervalCount > 1) "${sub.billingIntervalCount}\u00A0" else ""}$interval"
                     Text(
                         text = "${Analytics.localMoney(sub.catalogPriceCents, sub.catalogCurrency)}$frequency",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Lemon,
                         softWrap = false,
-                        maxLines = 1
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp)
                     )
                 }
                 if (sub.lastInvoiceUsdCents != null) {

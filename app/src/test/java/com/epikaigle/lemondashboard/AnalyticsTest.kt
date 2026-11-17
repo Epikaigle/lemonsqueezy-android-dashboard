@@ -165,6 +165,7 @@ class AnalyticsTest {
         assertTrue(est.reachesThreshold)
         // On Oct 16, both Oct 5 (held 11 days) and Oct 16 are within the 13-day holding period:
         assertEquals(7000L, est.holdingUsdCents)
+        assertEquals(2, est.holdingCount)
     }
 
     @Test fun realPocketNetCalculatesExactDeductions() {
@@ -176,6 +177,10 @@ class AnalyticsTest {
 
         val range = Analytics.moneyRange(1000L, "EUR", 1.0 / 1.1511)
         assertTrue(range.contains("–") || range.contains("-"))
+
+        // 100.00 USD * 0.90 = 90.00 EUR -> +-4% = 86,40 € – 93,60 € (single FX conversion)
+        val singleConversionRange = Analytics.moneyRange(10000L, "EUR", 0.90)
+        assertEquals("86,40\u00A0€\u00A0–\u00A093,60\u00A0€", singleConversionRange)
     }
 
     @Test fun mrrCalculationNormalizesBillingIntervals() {

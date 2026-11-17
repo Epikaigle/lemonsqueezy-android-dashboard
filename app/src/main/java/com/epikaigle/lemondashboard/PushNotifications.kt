@@ -56,7 +56,7 @@ object PushNotifications {
         val url = origin.trim().trimEnd('/').toHttpUrl()
         require(url.scheme == "https" && url.username.isEmpty() && url.password.isEmpty() &&
             url.query == null && url.fragment == null && url.encodedPath == "/") {
-            "Utilise seulement l'adresse HTTPS du Worker, sans chemin."
+            "Utilisez uniquement l'adresse HTTPS du Worker, sans chemin."
         }
         return url.newBuilder().addPathSegments("device/register").build().toString()
     }
@@ -72,9 +72,9 @@ object PushNotifications {
 
     suspend fun register(context: Context, origin: String, secret: String): PushConfig {
         require(available(context)) {
-            "Firebase non configuré dans cette APK. Ajoute le fichier google-services.json à la compilation."
+            "Firebase non configuré dans cette APK. Ajoutez le fichier google-services.json à la compilation."
         }
-        require(permissionGranted(context)) { "Autorise les notifications Android." }
+        require(permissionGranted(context)) { "Autorisez les notifications Android." }
         require(secret.trim().length >= 20) { "Le secret d'appairage doit contenir au moins 20 caractères." }
         endpoint(origin)
         val token = getToken()
